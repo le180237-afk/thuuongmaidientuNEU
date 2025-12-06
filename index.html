@@ -1,0 +1,648 @@
+import React, { useState } from 'react';
+import { ShoppingBag, User, Home, Heart, Zap, MoreHorizontal, Shirt, Layers, DollarSign } from 'lucide-react';
+
+// --- Cấu hình Tailwind CSS và Màu Pastel Mới (từ ảnh 2) ---
+const TONE = {
+  BG_PRIMARY: '#F7F6F0', // Màu kem/be sáng nhất từ ảnh 2
+  ACCENT_YELLOW: '#FCEB9C', // Màu vàng nhạt từ ảnh 2
+  ACCENT_GREEN: '#A2D396', // Màu xanh lá nhạt từ ảnh 2
+  ACCENT_DARK_GREEN: '#6A994E', // Màu xanh lá đậm hơn cho chữ nổi bật (dùng cho các chi tiết nổi bật)
+  // ĐÃ CẬP NHẬT THEO YÊU CẦU: Màu nâu đậm ấm áp mới
+  TEXT_DARK: '#5b402f', // Màu nâu đậm ấm áp mới (#5b402f)
+  SHADOW_LIGHT: 'rgba(162, 211, 150, 0.4)', // Bóng từ màu xanh lá nhạt
+  INPUT_BG: '#FFFFFF',
+  GRADIENT_BG: `linear-gradient(135deg, #FCEB9C 0%, #F7F6F0 50%, #A2D396 100%)`, // Gradient lấy cảm hứng từ ảnh 2
+};
+
+// --- Dữ liệu giả lập sản phẩm ---
+const products = [
+  { id: 1, name: "Nến Thơm Bã Cà Phê", price: "95.000", ecoTag: "Tái Sinh", icon: "☕" },
+  { id: 2, name: "Thiệp Giấy Hạt Giống", price: "45.000", ecoTag: "Gieo Mầm", icon: "🌱" },
+  { id: 3, name: "Túi Thơm Vỏ Cam Quýt", price: "70.000", ecoTag: "Hương Thơm", icon: "🍊" },
+  { id: 4, name: "Dreamcatcher Vải Thừa", price: "120.000", ecoTag: "Giảm Rác", icon: "🌙" },
+];
+
+// --- Các tính năng nổi bật (lấy cảm hứng từ MBBank) ---
+const features = [
+  { icon: <Zap size={28} />, title: "Quà tặng Độc đáo", desc: "Không đụng hàng" },
+  { icon: <Heart size={28} />, title: "Thân thiện Môi trường", desc: "Bền vững từ tâm" },
+  { icon: <MoreHorizontal size={28} />, title: "Chăm sóc Cá nhân", desc: "Lời chúc ý nghĩa" },
+];
+
+// --- API Configuration ---
+const API_KEY = ""; // Leave as-is
+const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${API_KEY}`;
+
+
+// --- Components ---
+
+/**
+ * Component Tích hợp Gemini API để tạo lời chúc vintage
+ */
+const GreetingCardGenerator = ({ selectedProduct }) => {
+  const [occasion, setOccasion] = useState('');
+  const [tone, setTone] = useState('');
+  const [generatedText, setGeneratedText] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const fetchWithExponentialBackoff = async (url, options, maxRetries = 5, delay = 1000) => {
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            const response = await fetch(url, options);
+            if (response.status !== 429 && response.ok) { 
+                return response;
+            }
+            if (response.status === 429 && i < maxRetries - 1) { 
+                await new Promise(resolve => setTimeout(resolve, delay * (2 ** i) + Math.random() * 1000));
+            } else {
+                return response; 
+            }
+        } catch (error) {
+            if (i < maxRetries - 1) {
+                await new Promise(resolve => setTimeout(resolve, delay * (2 ** i) + Math.random() * 1000));
+            } else {
+                throw error;
+            }
+        }
+    }
+    throw new Error('API request failed after multiple retries.');
+  };
+
+  const generateGreeting = async () => {
+    if (!occasion || !tone) {
+      setError('Vui lòng điền đầy đủ Dịp tặng và Cảm xúc.');
+      return;
+    }
+
+    setError('');
+    setIsLoading(true);
+    setGeneratedText('');
+
+    // ĐÃ CẬP NHẬT: Thay thế Grift bằng Dệt Mộc trong System Prompt
+    const systemPrompt = `Bạn là chuyên gia viết lời chúc thư pháp, vintage và ấm áp cho thương hiệu quà tặng thân thiện môi trường Dệt Mộc. Lời chúc cần ngắn gọn (tối đa 3 câu), tập trung vào ý nghĩa tái sinh, thiên nhiên và sự trân trọng.`;
+    const userQuery = `Hãy viết một lời chúc mừng cho sản phẩm "${selectedProduct.name}" nhân dịp "${occasion}", với tông điệu "${tone}". Nhấn mạnh tính thủ công và sự ấm áp của món quà.`;
+
+    const payload = {
+        contents: [{ parts: [{ text: userQuery }] }],
+        systemInstruction: {
+            parts: [{ text: systemPrompt }]
+        },
+    };
+
+    try {
+        const response = await fetchWithExponentialBackoff(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+        const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+
+        if (text) {
+            setGeneratedText(text);
+        } else {
+            setError('Không thể tạo lời chúc. Vui lòng thử lại.');
+        }
+    } catch (e) {
+        console.error('Gemini API Error:', e);
+        setError('Có lỗi xảy ra khi kết nối API. Vui lòng kiểm tra console.');
+    } finally {
+        setIsLoading(false);
+    }
+  };
+  
+
+
+  return (
+    <div className="p-4 mt-6 rounded-xl shadow-inner border border-dashed" style={{ backgroundColor: TONE.INPUT_BG, borderColor: TONE.ACCENT_GREEN }}>
+      <h3 className="text-xl font-bold mb-3 flex items-center" style={{ color: TONE.ACCENT_DARK_GREEN, fontFamily: 'Playfair Display, serif' }}>
+        <Zap size={20} className="mr-2"/> Đề Xuất Lời Chúc ✨
+      </h3>
+      <p className="text-sm mb-4" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>Tạo lời chúc cá nhân hóa theo phong cách Dệt Mộc.</p>
+      
+      <div className="space-y-3">
+        <div>
+          <label className="block text-xs font-medium mb-1" style={{color: TONE.TEXT_DARK, fontFamily: 'Inter, sans-serif'}}>Sản phẩm:</label>
+          <input 
+            type="text" 
+            value={selectedProduct.name} 
+            disabled 
+            className="w-full p-2 border rounded-lg bg-gray-100 text-sm"
+            style={{ borderColor: TONE.ACCENT_GREEN, fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium mb-1" style={{color: TONE.TEXT_DARK, fontFamily: 'Inter, sans-serif'}}>Dịp tặng quà:</label>
+          <input 
+            type="text" 
+            value={occasion} 
+            onChange={(e) => setOccasion(e.target.value)} 
+            className="w-full p-2 border rounded-lg focus:ring-1 focus:outline-none text-sm"
+            style={{ borderColor: TONE.ACCENT_GREEN, backgroundColor: TONE.INPUT_BG, fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}
+            placeholder="Sinh nhật, Lễ Tốt Nghiệp..."
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium mb-1" style={{color: TONE.TEXT_DARK, fontFamily: 'Inter, sans-serif'}}>Tông điệu:</label>
+          <input 
+            type="text" 
+            value={tone} 
+            onChange={(e) => setTone(e.target.value)} 
+            className="w-full p-2 border rounded-lg focus:ring-1 focus:outline-none text-sm"
+            style={{ borderColor: TONE.ACCENT_GREEN, backgroundColor: TONE.INPUT_BG, fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}
+            placeholder="Vui vẻ, Tôn trọng, Ấm áp..."
+          />
+        </div>
+        
+        {error && <p className="text-red-500 text-xs mt-2" style={{ fontFamily: 'Inter, sans-serif' }}>{error}</p>}
+        
+        <button 
+          onClick={generateGreeting} 
+          disabled={isLoading}
+          className="w-full py-2 rounded-lg text-white font-semibold text-sm hover:opacity-90 transition-opacity flex items-center justify-center disabled:opacity-50"
+          style={{ backgroundColor: TONE.ACCENT_DARK_GREEN, fontFamily: 'Inter, sans-serif' }}
+        >
+          {isLoading ? (
+            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          ) : (
+            <>
+              Tạo Lời Chúc ✨
+            </>
+          )}
+        </button>
+      </div>
+
+      {generatedText && (
+        <div className="mt-4 p-3 border rounded-lg bg-gray-50" style={{ borderColor: TONE.ACCENT_GREEN }}>
+          <p className="text-xs font-medium" style={{color: TONE.ACCENT_DARK_GREEN, fontFamily: 'Inter, sans-serif'}}>Lời Chúc Đề Xuất:</p>
+          <p className="mt-1 text-sm italic leading-relaxed" style={{ color: TONE.TEXT_DARK, fontFamily: 'Lora, serif' }}>
+            {generatedText}
+          </p>
+          {/* ĐÃ CẬP NHẬT: Thay thế Grift bằng Dệt Mộc */}
+          <p className="text-right text-xs mt-2 text-gray-500" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>— Dệt Mộc x Gemini AI</p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
+/**
+ * Hiển thị thẻ sản phẩm (Mobile App Style)
+ */
+const ProductCard = ({ product, onSelectProduct }) => {
+  return (
+    <div 
+      className="w-full bg-white rounded-xl shadow-md transition-all duration-300 transform hover:scale-[1.02] cursor-pointer overflow-hidden flex flex-col"
+      style={{ boxShadow: `0 4px 12px ${TONE.SHADOW_LIGHT}` }}
+    >
+      {/* Hình ảnh sản phẩm (Hiển thị icon) */}
+      <div className="h-40 flex items-center justify-center rounded-t-xl overflow-hidden" 
+           style={{backgroundColor: TONE.ACCENT_YELLOW}}> {/* Nền vàng nhạt */}
+        <span className="text-5xl">{product.icon}</span>
+      </div>
+      
+      {/* Thông tin sản phẩm */}
+      <div className="p-3 flex flex-col justify-between flex-grow">
+        <div>
+            <div className="text-xs font-medium uppercase tracking-wider px-2 py-0.5 rounded-full inline-block" 
+                style={{ backgroundColor: TONE.ACCENT_GREEN, color: 'white', fontFamily: 'Inter, sans-serif' }}> {/* Eco tag màu xanh lá */}
+              {product.ecoTag}
+            </div>
+            {/* Tên sản phẩm dùng màu TEXT_DARK */}
+            <h3 className="text-lg font-semibold mt-2 truncate" style={{color: TONE.TEXT_DARK, fontFamily: 'Quicksand, sans-serif'}}>{product.name}</h3>
+            <p className="text-xl font-bold mt-1" style={{color: TONE.ACCENT_DARK_GREEN, fontFamily: 'Playfair Display, serif'}}>{product.price}₫</p>
+        </div>
+        
+        <button 
+            onClick={() => onSelectProduct(product)}
+            className="mt-3 w-full py-2 rounded-lg text-white font-semibold text-sm hover:opacity-90 transition-opacity"
+            style={{ backgroundColor: TONE.ACCENT_DARK_GREEN, fontFamily: 'Inter, sans-serif' }}
+        >
+            Thêm vào Giỏ
+        </button>
+        <button 
+            onClick={() => onSelectProduct(product)}
+            className="mt-1 w-full py-2 rounded-lg text-sm font-semibold transition-colors border"
+            style={{ borderColor: TONE.ACCENT_DARK_GREEN, color: TONE.ACCENT_DARK_GREEN, backgroundColor: TONE.BG_PRIMARY, fontFamily: 'Inter, sans-serif' }}
+        >
+            Tạo Lời Chúc
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// --- Mobile/Desktop Header - ĐÃ CẬP NHẬT: Chỉ giữ lại Logo và Giỏ hàng ---
+const MobileHeader = ({ setActiveView }) => {
+  return (
+    // Header không cố định trên desktop.
+    <header className="py-4 px-6 flex justify-between items-center shadow-sm w-full" 
+            style={{ backgroundColor: TONE.BG_PRIMARY }}>
+        <div className="max-w-4xl mx-auto w-full flex justify-between items-center">
+            {/* Logo - ĐÃ CẬP NHẬT: Thay thế Grift bằng Dệt Mộc */}
+            <h1 className="text-2xl font-bold" style={{ fontFamily: 'DM Serif Display, serif', color: TONE.ACCENT_DARK_GREEN }}>Dệt Mộc</h1>
+            
+            {/* Cart Icon */}
+            <button onClick={() => setActiveView('cart')} className="text-gray-600">
+                <ShoppingBag size={24} style={{ color: TONE.ACCENT_DARK_GREEN }} />
+            </button>
+        </div>
+    </header>
+  );
+};
+
+// --- Thanh Tab Bar Cố Định ở Dưới - THAY THẾ CHO THANH ĐIỀU HƯỚNG CŨ ---
+const MobileBottomBar = ({ activeView, setActiveView }) => {
+    // Hàm trợ giúp để quyết định màu chữ cho nút điều hướng
+    const getNavColor = (viewName) => {
+        return activeView === viewName ? TONE.ACCENT_DARK_GREEN : TONE.TEXT_DARK;
+    };
+
+    // Định nghĩa các mục điều hướng với Icon và Text
+    // ĐÃ CẬP NHẬT: Tên Green Gift, Green Fit vẫn giữ nguyên để phù hợp với Icon/Mục đích
+    const navItems = [
+        { name: 'home', label: 'Green Gift', Icon: Home },
+        { name: 'greenfit', label: 'Green Fit', Icon: Layers },
+        { name: 'shop', label: 'Ưu Đãi', Icon: DollarSign },
+        { name: 'profile', label: 'Cá Nhân', Icon: User },
+    ];
+
+    return (
+        <div className="fixed bottom-0 left-0 right-0 z-50 shadow-lg border-t border-gray-200"
+             style={{ backgroundColor: TONE.BG_PRIMARY }}>
+            <div className="max-w-4xl mx-auto flex justify-around items-center h-16">
+                {navItems.map(({ name, label, Icon }) => (
+                    <button 
+                        key={name}
+                        onClick={() => setActiveView(name)}
+                        className="flex flex-col items-center justify-center p-1 transition-colors"
+                        style={{ color: getNavColor(name) }}
+                    >
+                        <Icon size={24} className="mb-0.5" />
+                        <span className="text-xs font-semibold" style={{ fontFamily: 'Quicksand, sans-serif' }}>{label}</span>
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+
+/**
+ * Trang Chủ (Mobile App Layout) - Green Production & Commerce Zone
+ */
+const HomeView = () => {
+  const [selectedProduct, setSelectedProduct] = useState(null);
+
+  return (
+    // ĐÃ CẬP NHẬT: Thêm padding bottom (pb-24) để nội dung không bị thanh tab bar che mất
+    <div className="pt-8 pb-24 min-h-screen relative" style={{ background: TONE.GRADIENT_BG }}>
+      {/* Container giới hạn chiều rộng trên desktop */}
+      <div className="max-w-4xl mx-auto p-4">
+        
+        {/* Banner Chính - Lấy cảm hứng từ MBBank */}
+        <div className="bg-white rounded-xl p-6 mb-6 shadow-md" style={{ boxShadow: `0 8px 20px ${TONE.SHADOW_LIGHT}` }}>
+          {/* Tiêu đề dùng màu ACCENT_DARK_GREEN - ĐÃ CẬP NHẬT: Thay thế Grift bằng Dệt Mộc */}
+          <h2 className="text-2xl font-bold mb-3" style={{ fontFamily: 'Playfair Display, serif', color: TONE.ACCENT_DARK_GREEN }}>Dệt Mộc - Quà tặng ý nghĩa</h2>
+          {/* Mô tả dùng TEXT_DARK */}
+          <p className="text-base mb-4" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>
+            Khám phá những món quà độc đáo, thân thiện với môi trường, được làm thủ công từ tâm huyết.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center mt-4">
+            {features.map((feature, index) => (
+              <div key={index} className="flex flex-col items-center p-3 bg-gray-50 rounded-lg shadow-sm" style={{borderColor: TONE.ACCENT_YELLOW, borderWidth: '1px'}}>
+                <span className="mb-1" style={{color: TONE.ACCENT_DARK_GREEN}}>{feature.icon}</span>
+                {/* Title và Desc đều dùng TEXT_DARK */}
+                <p className="text-sm font-semibold" style={{fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK}}>{feature.title}</p>
+                <p className="text-xs text-gray-500" style={{fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK}}>{feature.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Phần "Sản phẩm nổi bật" - Tiêu đề dùng màu TEXT_DARK */}
+        <h3 className="text-xl font-bold mb-4" style={{color: TONE.TEXT_DARK, fontFamily: 'Quicksand, sans-serif'}}>Sản phẩm dành cho bạn</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"> {/* Tăng số cột trên desktop */}
+          {products.map(p => 
+            <ProductCard 
+              key={p.id} 
+              product={p} 
+              onSelectProduct={setSelectedProduct} 
+            />
+          )}
+        </div>
+        
+        {/* Tích hợp Gemini API */}
+        {selectedProduct && (
+          <div className="mt-8 max-w-2xl mx-auto"> {/* Thu hẹp khung AI trên desktop */}
+             <GreetingCardGenerator selectedProduct={selectedProduct} />
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+};
+
+/**
+ * CẬP NHẬT: Trang Green Inspire Zone (Green Fit) - Mạng xã hội thời trang bền vững
+ */
+const GreenFitHub = () => {
+    // Giữ lại state GreenPoints để mô phỏng điểm số hiện tại
+    const [greenPoints, setGreenPoints] = useState(550);
+    const [aiOutfit, setAiOutfit] = useState('Chưa có gợi ý');
+    const [isGenerating, setIsGenerating] = useState(false);
+
+    const generateOutfit = () => {
+        setIsGenerating(true);
+        setTimeout(() => {
+            const outfits = [
+                "Áo sơ mi linen trắng + Quần culottes be (Phong cách Tối giản)",
+                "Váy midi hoa nhí (vintage) + Túi cói thủ công (Phong cách Du mục)",
+                "Áo phông tái chế + Quần jeans ống rộng (đã wax) + Giày canvas (Phong cách Street)",
+            ];
+            const randomOutfit = outfits[Math.floor(Math.random() * outfits.length)];
+            setAiOutfit(randomOutfit);
+            setIsGenerating(false);
+        }, 1500);
+    };
+
+    return (
+        // ĐÃ CẬP NHẬT: Thêm padding bottom (pb-24) để nội dung không bị thanh tab bar che mất
+        <div className="pt-8 pb-24 min-h-screen relative" style={{ background: TONE.GRADIENT_BG }}>
+            <div className="max-w-4xl mx-auto p-4">
+                {/* Banner Green Inspire Zone */}
+                <div className="bg-white rounded-xl p-6 mb-6 shadow-md" style={{ boxShadow: `0 8px 20px ${TONE.SHADOW_LIGHT}` }}>
+                    <h2 className="text-2xl font-bold mb-2 flex items-center" style={{ fontFamily: 'Playfair Display, serif', color: TONE.ACCENT_DARK_GREEN }}>
+                        <Heart size={28} className="mr-3" /> Green Inspire Zone: Lan Tỏa Sống Xanh 
+                    </h2>
+                    <p className="text-sm" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>
+                        Không gian chia sẻ outfits, mẹo tái chế và trao đổi đồ, nhận GreenPoints cho mỗi hành động tích cực!
+                    </p>
+                </div>
+
+                {/* Khu vực Greenpoints - Chỉ hiển thị điểm và liên kết đến Profile */}
+                <div className="bg-white rounded-xl p-5 mb-6 shadow-md flex justify-between items-center" style={{ border: `1px solid ${TONE.ACCENT_YELLOW}` }}>
+                    <div className="flex items-center">
+                        <Layers size={32} style={{ color: TONE.ACCENT_DARK_GREEN }} className="mr-4"/>
+                        <div>
+                            {/* Chữ thường dùng TEXT_DARK */}
+                            <p className="text-sm" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>Điểm Xanh Hiện Có</p>
+                            <p className="text-3xl font-bold" style={{ color: TONE.ACCENT_DARK_GREEN, fontFamily: 'Quicksand, sans-serif' }}>{greenPoints}</p>
+                        </div>
+                    </div>
+                    <button className="py-2 px-4 rounded-lg text-white font-semibold text-sm hover:opacity-90 transition-opacity"
+                        style={{ backgroundColor: TONE.ACCENT_DARK_GREEN, fontFamily: 'Inter, sans-serif' }}
+                        onClick={() => alert("Xem chi tiết Green Profile tại mục Cá Nhân!")}>
+                        Chi Tiết Profile
+                    </button>
+                </div>
+
+                {/* Công cụ AI Phối đồ */}
+                <div className="bg-white rounded-xl p-6 mb-6 shadow-md" style={{ border: `1px dashed ${TONE.ACCENT_GREEN}` }}>
+                    {/* Tiêu đề dùng TEXT_DARK */}
+                    <h3 className="text-xl font-bold mb-3" style={{ color: TONE.TEXT_DARK, fontFamily: 'Quicksand, sans-serif' }}>AI Quét Đồ & Phối Trang Phục</h3>
+                    <p className="text-sm" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>
+                        Tải ảnh tủ đồ của bạn lên để nhận gợi ý phối đồ từ AI, giúp bạn "mặc đẹp mà không cần mua thêm".
+                    </p>
+                    
+                    <button 
+                        onClick={generateOutfit} 
+                        disabled={isGenerating}
+                        className="w-full py-3 rounded-lg text-white font-semibold text-base hover:opacity-90 transition-opacity flex items-center justify-center disabled:opacity-50"
+                        style={{ backgroundColor: TONE.ACCENT_DARK_GREEN, fontFamily: 'Inter, sans-serif' }}
+                    >
+                         {isGenerating ? (
+                            <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                          ) : (
+                            <>
+                              <Layers size={18} className="mr-2"/> Gợi ý Phối đồ
+                            </>
+                          )}
+                    </button>
+                    
+                    {/* Kết quả AI */}
+                    <div className="mt-4 p-4 rounded-lg bg-gray-50" style={{ borderColor: TONE.ACCENT_GREEN, border: '1px dashed' }}>
+                        <p className="text-xs font-medium" style={{color: TONE.ACCENT_DARK_GREEN, fontFamily: 'Inter, sans-serif'}}>Gợi ý hôm nay:</p>
+                        <p className="mt-1 text-base leading-relaxed" style={{ color: TONE.TEXT_DARK, fontFamily: 'Lora, serif' }}>
+                            {aiOutfit}
+                        </p>
+                    </div>
+                </div>
+                
+                {/* Khu vực Trao đổi Cộng đồng: Đổi tên thành Trao Đổi & Tặng Đồ (Swap) */}
+                <div className="bg-white rounded-xl p-6 shadow-md" style={{ border: `1px solid ${TONE.ACCENT_GREEN}` }}>
+                    {/* Tiêu đề dùng TEXT_DARK */}
+                    <h3 className="text-xl font-bold mb-4" style={{ color: TONE.TEXT_DARK, fontFamily: 'Quicksand, sans-serif' }}>Trao Đổi & Tặng Đồ (Swap)</h3>
+                    <p className="text-sm mb-4" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>
+                        Kéo dài vòng đời sản phẩm: Tặng đồ, đổi đồ cũ chất lượng và nhận GreenPoints.
+                    </p>
+                    <div className="space-y-3">
+                        {/* Item 1 - Đồ để Trao Đổi */}
+                        <div className="flex items-center p-3 bg-gray-50 rounded-lg shadow-sm">
+                            <Shirt size={24} style={{ color: TONE.ACCENT_DARK_GREEN }} className="mr-3"/>
+                            <div>
+                                <p className="font-semibold text-sm" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>Áo len Oversize (Đã giặt sạch)</p>
+                                <p className="text-xs" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>Người tặng: JaneDoe | Tình trạng: 95%</p>
+                            </div>
+                        </div>
+                        {/* Item 2 - Đồ để Bán/Đổi điểm */}
+                        <div className="flex items-center p-3 bg-gray-50 rounded-lg shadow-sm">
+                            <DollarSign size={24} style={{ color: TONE.ACCENT_DARK_GREEN }} className="mr-3"/>
+                            <div>
+                                <p className="font-semibold text-sm" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>Váy Denim cũ - Đổi lấy 50 Greenpoints</p>
+                                <p className="text-xs" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>Người bán: EcoUser21 | Cần 50 điểm</p>
+                            </div>
+                        </div>
+                        
+                        <button className="w-full py-2 rounded-lg text-sm font-semibold border mt-4" 
+                            style={{ borderColor: TONE.ACCENT_DARK_GREEN, color: TONE.ACCENT_DARK_GREEN, backgroundColor: TONE.BG_PRIMARY, fontFamily: 'Inter, sans-serif' }}
+                            onClick={() => alert("Đăng tải món đồ để trao đổi hoặc tặng ngay!")}>
+                            Đăng Món Đồ của Bạn
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    );
+};
+
+
+/**
+ * Trang Giỏ Hàng giả lập
+ */
+const CartView = () => {
+    return (
+        // ĐÃ CẬP NHẬT: Thêm padding bottom (pb-24) để nội dung không bị thanh tab bar che mất
+        <div className="pt-8 pb-24 min-h-screen flex flex-col items-center justify-center" style={{ background: TONE.GRADIENT_BG }}>
+            <div className="p-8 rounded-xl bg-white shadow-md text-center max-w-md mx-auto" style={{ border: `1px solid ${TONE.ACCENT_GREEN}` }}>
+                <ShoppingBag size={48} className="mx-auto mb-4" style={{ color: TONE.ACCENT_DARK_GREEN }} />
+                {/* Tiêu đề dùng TEXT_DARK */}
+                <h2 className="text-xl font-bold mb-2" style={{ fontFamily: 'Playfair Display, serif', color: TONE.TEXT_DARK }}>Giỏ hàng trống</h2>
+                {/* Mô tả dùng TEXT_DARK */}
+                <p className="text-sm mb-6" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>Hãy thêm các sản phẩm yêu thích vào giỏ hàng của bạn!</p>
+                <button 
+                    className="w-full py-2 rounded-lg text-white font-semibold text-sm hover:opacity-90 transition-opacity"
+                    style={{ backgroundColor: TONE.ACCENT_DARK_GREEN, fontFamily: 'Inter, sans-serif' }}
+                    onClick={() => {}} 
+                >
+                    Tiếp tục mua sắm
+                </button>
+            </div>
+        </div>
+    );
+};
+
+/**
+ * CẬP NHẬT: Trang Cá Nhân/Hồ Sơ giả lập - Thêm Green Profile
+ */
+const ProfileView = () => {
+    // Dữ liệu giả lập cho Green Profile
+    const [greenPoints, setGreenPoints] = useState(550);
+    const [itemsSwapped, setItemsSwapped] = useState(8);
+    const [postsShared, setPostsShared] = useState(12);
+
+    return (
+        // ĐÃ CẬP NHẬT: Thêm padding bottom (pb-24) để nội dung không bị thanh tab bar che mất
+        <div className="pt-8 pb-24 min-h-screen" style={{ background: TONE.GRADIENT_BG }}>
+            <div className="max-w-4xl mx-auto p-4">
+                
+                {/* Khu vực Green Profile - THÊM MỚI THEO DỰ ÁN */}
+                <div className="bg-white rounded-xl p-6 mb-6 shadow-md" style={{ border: `1px solid ${TONE.ACCENT_YELLOW}` }}>
+                    <h2 className="text-xl font-bold mb-4 flex items-center" style={{ fontFamily: 'Playfair Display, serif', color: TONE.ACCENT_DARK_GREEN }}>
+                        <Heart size={24} className="mr-2"/> Hành Trình Xanh (Green Profile)
+                    </h2>
+                    
+                    {/* Thẻ Điểm Xanh */}
+                    <div className="mb-4 p-4 rounded-lg flex items-center justify-between" style={{ backgroundColor: TONE.ACCENT_GREEN, color: 'white' }}>
+                        <div>
+                            <p className="text-sm font-medium" style={{ fontFamily: 'Inter, sans-serif' }}>Tổng Điểm Xanh (GreenPoints)</p>
+                            <p className="text-4xl font-black mt-1" style={{ fontFamily: 'Quicksand, sans-serif' }}>{greenPoints}</p>
+                        </div>
+                        <button className="py-1 px-3 rounded-full text-xs font-semibold"
+                            style={{ backgroundColor: TONE.ACCENT_DARK_GREEN }}
+                            onClick={() => alert("Chức năng đổi ưu đãi sẽ sớm ra mắt!")}>
+                            Đổi Quà
+                        </button>
+                    </div>
+
+                    {/* Thống kê hoạt động */}
+                    <div className="grid grid-cols-2 gap-4 text-center">
+                        <div className="p-3 rounded-lg border" style={{ borderColor: TONE.ACCENT_YELLOW }}>
+                            <p className="text-2xl font-bold" style={{ color: TONE.ACCENT_DARK_GREEN }}>{itemsSwapped}</p>
+                            <p className="text-xs" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>Đồ đã Trao đổi/Tặng</p>
+                        </div>
+                        <div className="p-3 rounded-lg border" style={{ borderColor: TONE.ACCENT_YELLOW }}>
+                            <p className="text-2xl font-bold" style={{ color: TONE.ACCENT_DARK_GREEN }}>{postsShared}</p>
+                            <p className="text-xs" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>Bài viết đã Chia sẻ</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div className="bg-white rounded-xl p-6 mb-6 shadow-md" style={{ border: `1px solid ${TONE.ACCENT_GREEN}` }}>
+                    <h2 className="text-xl font-bold mb-4" style={{ fontFamily: 'Playfair Display, serif', color: TONE.ACCENT_DARK_GREEN }}>Thông Tin Tài Khoản</h2>
+                    <div className="space-y-4">
+                        <div className="flex items-center space-x-4">
+                            <User size={32} style={{ color: TONE.ACCENT_DARK_GREEN }} />
+                            <div>
+                                {/* TÊN ĐÃ ĐƯỢC CẬP NHẬT */}
+                                <p className="font-semibold" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>Cao Hoàng Vinh</p> 
+                                <p className="text-sm" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>vinh.cao@example.com</p>
+                            </div>
+                        </div>
+                        <button className="w-full py-2 rounded-lg text-sm font-semibold border" style={{ borderColor: TONE.ACCENT_DARK_GREEN, color: TONE.ACCENT_DARK_GREEN, backgroundColor: TONE.BG_PRIMARY, fontFamily: 'Inter, sans-serif' }}>
+                            Chỉnh sửa hồ sơ
+                        </button>
+                        <button className="w-full py-2 rounded-lg text-sm font-semibold border" style={{ borderColor: TONE.ACCENT_DARK_GREEN, color: TONE.ACCENT_DARK_GREEN, backgroundColor: TONE.BG_PRIMARY, fontFamily: 'Inter, sans-serif' }}>
+                            Lịch sử đơn hàng
+                        </button>
+                    </div>
+                </div>
+
+                <div className="bg-white rounded-xl p-6 shadow-md" style={{ border: `1px solid ${TONE.ACCENT_GREEN}` }}>
+                    {/* ĐÃ CẬP NHẬT: Thay thế Grift bằng Dệt Mộc */}
+                    <h3 className="text-lg font-bold mb-3" style={{ fontFamily: 'Playfair Display, serif', color: TONE.ACCENT_DARK_GREEN }}>Về Dệt Mộc</h3>
+                    {/* ĐÃ CẬP NHẬT: Thay thế Grift bằng Dệt Mộc */}
+                    <p className="text-sm leading-relaxed" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>
+                        Dệt Mộc mang đến những món quà thân thiện môi trường, tinh tế và độc đáo. Chúng tôi tin vào vẻ đẹp của sự tái sinh và giá trị thủ công.
+                    </p>
+                    <button className="mt-4 w-full py-2 rounded-lg text-white font-semibold text-sm hover:opacity-90 transition-opacity"
+                        style={{ backgroundColor: TONE.ACCENT_DARK_GREEN, fontFamily: 'Inter, sans-serif' }}>
+                        Tìm hiểu thêm
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
+/**
+ * Component App Chính (Quản lý trạng thái)
+ */
+const App = () => {
+  const [activeView, setActiveView] = useState('home');
+
+  const renderView = () => {
+    switch (activeView) {
+      case 'home':
+        return <HomeView />;
+      case 'cart':
+        return <CartView />;
+      case 'profile':
+        return <ProfileView />;
+      case 'greenfit': // Green Inspire Zone
+        return <GreenFitHub />;
+      case 'shop': 
+        return (
+          // ĐÃ CẬP NHẬT: Thêm padding bottom (pb-24)
+          <div className="pt-8 pb-24 min-h-screen flex items-center justify-center text-center" style={{ background: TONE.GRADIENT_BG }}>
+            {/* Ưu Đãi dùng TEXT_DARK */}
+            <h2 className="text-2xl font-bold" style={{ fontFamily: 'Playfair Display, serif', color: TONE.TEXT_DARK }}>Ưu Đãi Của Bạn</h2> 
+          </div>
+        );
+      default:
+        return <HomeView />;
+    }
+  };
+
+  return (
+    // Đã loại bỏ max-w-sm và h-screen để mở rộng cho desktop
+    <div className="min-h-screen antialiased" style={{ backgroundColor: TONE.BG_PRIMARY }}> 
+      <div className="relative w-full flex flex-col min-h-screen">
+        {/* Header trên cùng (Chỉ còn Logo và Giỏ hàng) */}
+        <MobileHeader setActiveView={setActiveView} />
+        <div className="flex-grow overflow-y-auto">
+          {renderView()}
+        </div>
+        
+        {/* THANH TAB BAR CỐ ĐỊNH Ở DƯỚI */}
+        <MobileBottomBar activeView={activeView} setActiveView={setActiveView} />
+      </div>
+    </div>
+  );
+};
+
+// Thiết lập font chữ cho toàn bộ ứng dụng
+const rootStyle = document.documentElement.style;
+rootStyle.setProperty('font-family', 'Inter, sans-serif');
+const link = document.createElement('link');
+// Đã thêm Quicksand vào link import font
+link.href = 'https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@700;900&family=Lora:wght@400;700&family=Quicksand:wght@500;700&display=swap';
+link.rel = 'stylesheet';
+document.head.appendChild(link);
+
+
+export default App;
