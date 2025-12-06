@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dệt Mộc - Quà tặng Xanh</title>
 
-    <!-- 1. Thư viện giao diện Tailwind CSS -->
+    <!-- 1. Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- 2. Cấu hình màu sắc thương hiệu cho Tailwind -->
+    <!-- 2. Config Tailwind -->
     <script>
         tailwind.config = {
             theme: {
@@ -19,79 +19,104 @@
                         accentGreen: '#A2D396',
                         accentDarkGreen: '#6A994E',
                         textDark: '#5b402f',
+                        danger: '#e74c3c',
                     },
                     fontFamily: {
                         serif: ['Playfair Display', 'serif'],
                         sans: ['Inter', 'sans-serif'],
                         mono: ['Quicksand', 'sans-serif'],
+                    },
+                    animation: {
+                        'fade-in-down': 'fadeInDown 0.5s ease-out',
+                        'bounce-short': 'bounce 0.5s 1',
+                    },
+                    keyframes: {
+                        fadeInDown: {
+                            '0%': { opacity: '0', transform: 'translateY(-10px) translateX(-50%)' },
+                            '100%': { opacity: '1', transform: 'translateY(0) translateX(-50%)' },
+                        }
                     }
                 }
             }
         }
     </script>
 
-    <!-- 3. Thư viện React (Cốt lõi để chạy web) -->
+    <!-- 3. React -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
 
-    <!-- 4. Babel (Giúp trình duyệt hiểu code React) -->
+    <!-- 4. Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- 5. Font chữ Google -->
+    <!-- 5. Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@700;900&family=Lora:wght@400;700&family=Quicksand:wght@500;700&display=swap" rel="stylesheet">
 
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #F7F6F0; }
-        /* Hiệu ứng loading */
-        .loader { border: 3px solid #f3f3f3; border-radius: 50%; border-top: 3px solid #6A994E; width: 20px; height: 20px; -webkit-animation: spin 1s linear infinite; animation: spin 1s linear infinite; }
+        body { font-family: 'Inter', sans-serif; background-color: #F7F6F0; user-select: none; -webkit-tap-highlight-color: transparent; }
+        /* Scrollbar ẩn cho đẹp trên mobile */
+        ::-webkit-scrollbar { width: 0px; background: transparent; }
+        .loader { border: 3px solid #f3f3f3; border-radius: 50%; border-top: 3px solid #6A994E; width: 20px; height: 20px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
-    <!-- Nơi ứng dụng sẽ hiển thị -->
     <div id="root"></div>
 
-    <!-- CODE ỨNG DỤNG BẮT ĐẦU TỪ ĐÂY -->
     <script type="text/babel">
-        // Lấy các hàm từ thư viện React ra để dùng
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useRef } = React;
 
-        // --- 1. ĐỊNH NGHĨA ICON (Để không bị lỗi import lucide-react) ---
-        // Thay vì import, ta vẽ trực tiếp icon bằng SVG
-        const Icon = ({ children, className }) => (
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        // --- 1. ICON COMPONENTS ---
+        const Icon = ({ children, className, onClick }) => (
+            <svg onClick={onClick} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
                 {children}
             </svg>
         );
 
-        const ShoppingBagIcon = () => <Icon><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></Icon>;
-        const UserIcon = () => <Icon><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></Icon>;
-        const HomeIcon = () => <Icon><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></Icon>;
-        const HeartIcon = () => <Icon><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5 4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></Icon>;
-        const ZapIcon = () => <Icon><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></Icon>;
-        const MenuIcon = () => <Icon><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></Icon>;
-        const ShirtIcon = () => <Icon><path d="M20.38 3.4a1.43 1.43 0 0 0-1.26-.81H14a2 2 0 0 1-4 0H4.88a1.43 1.43 0 0 0-1.27.81L2 7.7a1.43 1.43 0 0 0 .8 1.83l1.2 3.6V20a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6.87l1.2-3.6a1.43 1.43 0 0 0 .8-1.83l-1.62-4.3z"/></Icon>;
-        const LayersIcon = () => <Icon><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></Icon>;
-        const DollarSignIcon = () => <Icon><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></Icon>;
+        const Icons = {
+            ShoppingBag: () => <Icon><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></Icon>,
+            User: () => <Icon><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></Icon>,
+            Home: () => <Icon><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></Icon>,
+            Heart: () => <Icon><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5 4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></Icon>,
+            Zap: () => <Icon><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></Icon>,
+            Trash: () => <Icon><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></Icon>,
+            Camera: () => <Icon><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></Icon>,
+            Check: () => <Icon><polyline points="20 6 9 17 4 12"/></Icon>,
+            Menu: () => <Icon><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></Icon>,
+            Layers: () => <Icon><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></Icon>
+        };
 
-        // --- 2. DỮ LIỆU GIẢ LẬP ---
+        // --- 2. DỮ LIỆU ---
         const products = [
-            { id: 1, name: "Nến Thơm Bã Cà Phê", price: "95.000", ecoTag: "Tái Sinh", icon: "☕" },
-            { id: 2, name: "Thiệp Giấy Hạt Giống", price: "45.000", ecoTag: "Gieo Mầm", icon: "🌱" },
-            { id: 3, name: "Túi Thơm Vỏ Cam Quýt", price: "70.000", ecoTag: "Hương Thơm", icon: "🍊" },
-            { id: 4, name: "Dreamcatcher Vải Thừa", price: "120.000", ecoTag: "Giảm Rác", icon: "🌙" },
+            { id: 1, name: "Nến Thơm Bã Cà Phê", price: 95000, ecoTag: "Tái Sinh", icon: "☕" },
+            { id: 2, name: "Thiệp Giấy Hạt Giống", price: 45000, ecoTag: "Gieo Mầm", icon: "🌱" },
+            { id: 3, name: "Túi Thơm Vỏ Cam Quýt", price: 70000, ecoTag: "Hương Thơm", icon: "🍊" },
+            { id: 4, name: "Dreamcatcher Vải Thừa", price: 120000, ecoTag: "Giảm Rác", icon: "🌙" },
+            { id: 5, name: "Xà Bông Mướp Đắng", price: 65000, ecoTag: "Handmade", icon: "🥒" },
+            { id: 6, name: "Lót Ly Vải Vụn", price: 30000, ecoTag: "Tái Chế", icon: "🧵" },
         ];
 
-        const features = [
-            { icon: <ZapIcon/>, title: "Quà tặng Độc đáo", desc: "Không đụng hàng" },
-            { icon: <HeartIcon/>, title: "Thân thiện Môi trường", desc: "Bền vững từ tâm" },
-            { icon: <MenuIcon/>, title: "Chăm sóc Cá nhân", desc: "Lời chúc ý nghĩa" },
-        ];
+        // --- 3. TIỆN ÍCH ---
+        const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
 
-        // --- 3. CÁC COMPONENT GIAO DIỆN ---
+        // --- 4. COMPONENTS ---
 
-        // Component: Tạo Lời Chúc (Dùng API giả lập để tránh lộ Key)
-        const GreetingCardGenerator = ({ selectedProduct }) => {
+        // Toast Notification (Thông báo nổi)
+        const Toast = ({ message, onClose }) => {
+            useEffect(() => {
+                const timer = setTimeout(onClose, 2500); // Tự tắt sau 2.5s
+                return () => clearTimeout(timer);
+            }, [onClose]);
+
+            return (
+                <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-accentDarkGreen text-white px-6 py-3 rounded-full shadow-xl z-[60] flex items-center animate-fade-in-down min-w-[200px] justify-center">
+                    <span className="mr-2 text-xl">🌿</span> 
+                    <span className="font-medium text-sm">{message}</span>
+                </div>
+            );
+        };
+
+        // Greeting Generator
+        const GreetingCardGenerator = ({ selectedProduct, showToast }) => {
             const [occasion, setOccasion] = useState('');
             const [tone, setTone] = useState('');
             const [generatedText, setGeneratedText] = useState('');
@@ -99,157 +124,344 @@
 
             const generateGreeting = () => {
                 if (!occasion || !tone) {
-                    alert('Vui lòng nhập Dịp tặng và Cảm xúc!');
+                    showToast('Vui lòng nhập Dịp và Cảm xúc!');
                     return;
                 }
                 setIsLoading(true);
-                // Giả lập API trả về sau 1.5 giây (Để demo chạy mượt mà không cần API Key)
                 setTimeout(() => {
-                    setGeneratedText(`"Nhân dịp ${occasion}, mong rằng món quà ${selectedProduct.name} nhỏ bé này sẽ mang đến cho bạn niềm vui giản dị nhưng ấm áp. Chúc bạn luôn an yên như chính sự mộc mạc của thiên nhiên."`);
+                    const templates = [
+                        `"Nhân dịp ${occasion}, mong món quà ${selectedProduct.name} này sẽ gói trọn sự ${tone} mình dành cho bạn. Sống xanh an lành nhé!"`,
+                        `"Gửi bạn chút ${tone} từ thiên nhiên qua ${selectedProduct.name}. Chúc ${occasion} thật nhiều niềm vui!"`,
+                        `"Món quà mộc mạc ${selectedProduct.name} cho một dịp ${occasion} đặc biệt. Luôn giữ tâm hồn ${tone} nhé!"`
+                    ];
+                    setGeneratedText(templates[Math.floor(Math.random() * templates.length)]);
                     setIsLoading(false);
+                    showToast('Đã tạo lời chúc thành công!');
                 }, 1500);
             };
 
             return (
-                <div className="p-4 mt-6 rounded-xl border border-dashed border-accentGreen bg-white">
-                    <h3 className="text-xl font-bold mb-3 flex items-center text-accentDarkGreen font-serif">
-                        <span className="mr-2">✨</span> Đề Xuất Lời Chúc
+                <div className="p-5 mt-6 rounded-2xl border border-dashed border-accentGreen bg-white shadow-sm">
+                    <h3 className="text-lg font-bold mb-4 flex items-center text-accentDarkGreen font-serif">
+                        ✨ Trợ Lý Lời Chúc AI
                     </h3>
                     <div className="space-y-3">
-                        <input type="text" value={selectedProduct.name} disabled className="w-full p-2 border rounded-lg bg-gray-100 text-textDark text-sm" />
-                        <input type="text" value={occasion} onChange={(e) => setOccasion(e.target.value)} className="w-full p-2 border rounded-lg text-sm border-accentGreen focus:outline-none" placeholder="Dịp (VD: Sinh nhật)..." />
-                        <input type="text" value={tone} onChange={(e) => setTone(e.target.value)} className="w-full p-2 border rounded-lg text-sm border-accentGreen focus:outline-none" placeholder="Cảm xúc (VD: Ấm áp)..." />
+                        <div className="bg-bgPrimary p-3 rounded-lg flex items-center">
+                            <span className="text-2xl mr-3">{selectedProduct.icon}</span>
+                            <span className="font-semibold text-textDark text-sm">{selectedProduct.name}</span>
+                        </div>
+                        <input type="text" value={occasion} onChange={(e) => setOccasion(e.target.value)} className="w-full p-3 border rounded-lg text-sm border-gray-200 focus:border-accentGreen focus:outline-none transition-colors" placeholder="Dịp tặng (VD: Sinh nhật, Kỷ niệm)..." />
+                        <input type="text" value={tone} onChange={(e) => setTone(e.target.value)} className="w-full p-3 border rounded-lg text-sm border-gray-200 focus:border-accentGreen focus:outline-none transition-colors" placeholder="Cảm xúc (VD: Chân thành, Vui vẻ)..." />
                         
-                        <button onClick={generateGreeting} disabled={isLoading} className="w-full py-2 rounded-lg text-white font-semibold text-sm bg-accentDarkGreen hover:opacity-90 flex justify-center items-center">
-                            {isLoading ? <div className="loader"></div> : "Tạo Lời Chúc Ngay"}
+                        <button onClick={generateGreeting} disabled={isLoading} className="w-full py-3 rounded-xl text-white font-bold text-sm bg-accentDarkGreen hover:opacity-90 active:scale-95 transition-transform flex justify-center items-center shadow-md shadow-accentGreen/30">
+                            {isLoading ? <div className="loader mr-2"></div> : "✍️ Viết Lời Chúc"}
                         </button>
                     </div>
                     {generatedText && (
-                        <div className="mt-4 p-3 border border-accentGreen rounded-lg bg-bgPrimary">
-                            <p className="text-sm italic leading-relaxed text-textDark font-serif">{generatedText}</p>
-                            <p className="text-right text-xs mt-2 text-gray-500">— Dệt Mộc AI</p>
+                        <div className="mt-4 p-4 border-l-4 border-accentDarkGreen bg-bgPrimary rounded-r-lg animate-fade-in-down">
+                            <p className="text-sm italic leading-relaxed text-textDark font-serif">"{generatedText}"</p>
+                            <div className="flex justify-end mt-2">
+                                <button className="text-xs text-accentDarkGreen font-bold flex items-center hover:underline" onClick={() => {navigator.clipboard.writeText(generatedText); showToast('Đã sao chép!');}}>
+                                    Sao chép
+                                </button>
+                            </div>
                         </div>
                     )}
                 </div>
             );
         };
 
-        // Component: Thẻ Sản Phẩm
-        const ProductCard = ({ product, onSelectProduct }) => (
-            <div className="w-full bg-white rounded-xl shadow-md overflow-hidden flex flex-col hover:shadow-lg transition-shadow">
-                <div className="h-40 flex items-center justify-center bg-accentYellow">
-                    <span className="text-5xl">{product.icon}</span>
+        // Product Card
+        const ProductCard = ({ product, onSelect, onAddCart }) => (
+            <div className="bg-white rounded-2xl shadow-sm overflow-hidden flex flex-col hover:shadow-xl transition-all duration-300 transform active:scale-95 border border-gray-100">
+                <div className="h-32 flex items-center justify-center bg-gradient-to-br from-bgPrimary to-accentYellow/30 relative group cursor-pointer" onClick={() => onSelect(product)}>
+                    <span className="text-5xl group-hover:scale-110 transition-transform duration-300">{product.icon}</span>
+                    <div className="absolute top-2 right-2 bg-white/80 backdrop-blur px-2 py-0.5 rounded-full text-[10px] font-bold text-accentDarkGreen border border-accentGreen/20">
+                        {product.ecoTag}
+                    </div>
                 </div>
                 <div className="p-3 flex flex-col justify-between flex-grow">
-                    <div>
-                        <div className="text-xs font-medium uppercase px-2 py-0.5 rounded-full inline-block bg-accentGreen text-white mb-1">{product.ecoTag}</div>
-                        <h3 className="text-lg font-semibold text-textDark font-mono truncate">{product.name}</h3>
-                        <p className="text-xl font-bold text-accentDarkGreen font-serif">{product.price}₫</p>
+                    <div onClick={() => onSelect(product)} className="cursor-pointer">
+                        <h3 className="text-sm font-bold text-textDark font-mono truncate mb-1">{product.name}</h3>
+                        <p className="text-base font-black text-accentDarkGreen font-serif">{formatCurrency(product.price)}</p>
                     </div>
-                    <div className="mt-3 space-y-2">
-                        <button onClick={() => onSelectProduct(product)} className="w-full py-2 rounded-lg text-white text-sm font-semibold bg-accentDarkGreen">Thêm vào Giỏ</button>
-                        <button onClick={() => onSelectProduct(product)} className="w-full py-2 rounded-lg text-sm font-semibold border border-accentDarkGreen text-accentDarkGreen">Viết Lời Chúc</button>
+                    <div className="mt-3 grid grid-cols-4 gap-2">
+                        <button onClick={() => onAddCart(product)} className="col-span-3 py-2 rounded-lg text-white text-xs font-bold bg-accentDarkGreen hover:bg-opacity-90 active:bg-opacity-100 flex items-center justify-center">
+                            Thêm vào <Icons.ShoppingBag className="w-3 h-3 ml-1" />
+                        </button>
+                        <button onClick={() => onSelect(product)} className="col-span-1 py-2 rounded-lg border border-accentGreen text-accentDarkGreen flex items-center justify-center hover:bg-accentGreen/10">
+                            ✨
+                        </button>
                     </div>
                 </div>
             </div>
         );
 
-        // Component: Trang Chủ
-        const HomeView = () => {
-            const [selectedProduct, setSelectedProduct] = useState(null);
+        // --- VIEWS ---
+
+        const HomeView = ({ onSelectProduct, onAddCart, selectedProduct, showToast }) => {
             return (
-                <div className="pt-4 pb-24 px-4 max-w-4xl mx-auto">
+                <div className="pt-2 pb-24 px-4 max-w-4xl mx-auto">
                     {/* Banner */}
-                    <div className="bg-white rounded-xl p-6 mb-6 shadow-md border-t-4 border-accentDarkGreen">
-                        <h2 className="text-2xl font-bold mb-2 text-accentDarkGreen font-serif">Dệt Mộc - Quà tặng ý nghĩa</h2>
-                        <p className="text-textDark mb-4">Gói ghém yêu thương trong từng sản phẩm tái sinh.</p>
-                        <div className="flex justify-around text-center">
-                            {features.map((f, i) => (
-                                <div key={i} className="flex flex-col items-center">
-                                    <div className="text-accentDarkGreen mb-1">{f.icon}</div>
-                                    <p className="text-xs font-bold text-textDark">{f.title}</p>
-                                </div>
-                            ))}
+                    <div className="bg-accentDarkGreen text-white rounded-2xl p-6 mb-8 shadow-lg relative overflow-hidden">
+                        <div className="relative z-10">
+                            <h2 className="text-2xl font-bold mb-2 font-serif">Mùa Quà Tặng Xanh</h2>
+                            <p className="text-sm opacity-90 mb-4 max-w-[200px]">Giảm 20% cho các sản phẩm tái chế từ bã cà phê.</p>
+                            <button className="bg-white text-accentDarkGreen px-4 py-2 rounded-lg text-xs font-bold shadow-md active:scale-95 transition-transform">Khám phá ngay</button>
                         </div>
+                        <div className="absolute right-[-20px] bottom-[-40px] text-[120px] opacity-20">🌿</div>
                     </div>
 
-                    {/* Danh sách sản phẩm */}
-                    <h3 className="text-xl font-bold mb-4 text-textDark font-mono">Sản phẩm nổi bật</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {products.map(p => <ProductCard key={p.id} product={p} onSelectProduct={setSelectedProduct} />)}
+                    {/* Products Grid */}
+                    <div className="flex justify-between items-end mb-4">
+                        <h3 className="text-xl font-bold text-textDark font-serif">Sản phẩm nổi bật</h3>
+                        <span className="text-xs text-accentDarkGreen font-bold cursor-pointer hover:underline">Xem tất cả</span>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                        {products.map(p => (
+                            <ProductCard 
+                                key={p.id} 
+                                product={p} 
+                                onSelect={onSelectProduct} 
+                                onAddCart={onAddCart}
+                            />
+                        ))}
                     </div>
 
-                    {/* Khu vực tạo lời chúc */}
-                    {selectedProduct && <div className="mt-8"><GreetingCardGenerator selectedProduct={selectedProduct} /></div>}
-                </div>
-            );
-        };
-
-        // Component: Green Fit (Cộng đồng)
-        const GreenFitHub = () => {
-            const [points, setPoints] = useState(550);
-            return (
-                <div className="pt-4 pb-24 px-4 max-w-4xl mx-auto">
-                    <div className="bg-white rounded-xl p-6 mb-6 shadow-md">
-                        <h2 className="text-2xl font-bold mb-2 text-accentDarkGreen font-serif flex items-center"><span className="mr-2"><HeartIcon/></span> Green Inspire Zone</h2>
-                        <div className="bg-accentGreen/20 p-4 rounded-lg flex justify-between items-center mt-4 border border-accentGreen">
-                            <div>
-                                <p className="text-sm text-textDark">Điểm Xanh của bạn</p>
-                                <p className="text-4xl font-bold text-accentDarkGreen font-mono">{points}</p>
+                    {/* Greeting Generator Section */}
+                    <div id="greeting-section">
+                        {selectedProduct ? (
+                            <GreetingCardGenerator selectedProduct={selectedProduct} showToast={showToast} />
+                        ) : (
+                            <div className="mt-8 p-6 text-center border-2 border-dashed border-gray-200 rounded-2xl opacity-60">
+                                <p className="text-sm">Chọn nút ✨ trên sản phẩm để tạo lời chúc</p>
                             </div>
-                            <button className="px-4 py-2 bg-accentDarkGreen text-white rounded-lg text-sm font-bold">Đổi Quà</button>
-                        </div>
-                    </div>
-                    <div className="bg-white rounded-xl p-6 shadow-md border border-dashed border-accentDarkGreen text-center">
-                        <h3 className="font-bold text-textDark mb-2">AI Phối Đồ Bền Vững</h3>
-                        <p className="text-sm text-gray-500 mb-4">Upload ảnh tủ đồ để nhận gợi ý mix-match!</p>
-                        <button className="w-full py-3 bg-accentDarkGreen text-white rounded-lg font-semibold">Thử Ngay</button>
+                        )}
                     </div>
                 </div>
             );
         };
 
-        // Component: App Chính
-        const App = () => {
-            const [view, setView] = useState('home');
+        const CartView = ({ cart, onRemove, onCheckout }) => {
+            const total = cart.reduce((sum, item) => sum + item.price, 0);
 
-            const renderView = () => {
-                if (view === 'home') return <HomeView />;
-                if (view === 'community') return <GreenFitHub />;
-                if (view === 'cart') return <div className="h-screen flex items-center justify-center text-textDark">Giỏ hàng đang trống 🛒</div>;
-                if (view === 'profile') return <div className="h-screen flex items-center justify-center text-textDark">Trang cá nhân của Vinh 👤</div>;
+            if (cart.length === 0) return (
+                <div className="h-[80vh] flex flex-col items-center justify-center text-center px-6">
+                    <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4 text-4xl animate-bounce-short">🛒</div>
+                    <h2 className="text-xl font-bold text-textDark mb-2">Giỏ hàng trống trơn</h2>
+                    <p className="text-sm text-gray-500 mb-6">Hãy thêm vài món quà xanh vào đây nhé!</p>
+                </div>
+            );
+
+            return (
+                <div className="pt-4 pb-32 px-4 max-w-4xl mx-auto">
+                    <h2 className="text-2xl font-bold text-textDark font-serif mb-6">Giỏ hàng ({cart.length})</h2>
+                    <div className="space-y-4">
+                        {cart.map((item, index) => (
+                            <div key={index} className="flex items-center bg-white p-4 rounded-xl shadow-sm border border-gray-50 animate-fade-in-down" style={{animationDelay: `${index * 50}ms`}}>
+                                <div className="w-16 h-16 bg-bgPrimary rounded-lg flex items-center justify-center text-3xl mr-4 flex-shrink-0">
+                                    {item.icon}
+                                </div>
+                                <div className="flex-grow">
+                                    <h3 className="font-bold text-textDark text-sm">{item.name}</h3>
+                                    <p className="text-accentDarkGreen font-bold text-sm mt-1">{formatCurrency(item.price)}</p>
+                                </div>
+                                <button onClick={() => onRemove(index)} className="p-2 text-gray-400 hover:text-danger hover:bg-red-50 rounded-full transition-colors">
+                                    <Icons.Trash className="w-5 h-5"/>
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                    
+                    {/* Fixed Bottom Checkout */}
+                    <div className="fixed bottom-16 left-0 right-0 bg-white border-t border-gray-100 p-4 shadow-lg z-40">
+                        <div className="max-w-4xl mx-auto flex justify-between items-center mb-3">
+                            <span className="text-sm text-gray-500">Tổng cộng:</span>
+                            <span className="text-xl font-black text-accentDarkGreen">{formatCurrency(total)}</span>
+                        </div>
+                        <button onClick={onCheckout} className="w-full py-3 bg-accentDarkGreen text-white font-bold rounded-xl shadow-lg shadow-accentGreen/40 active:scale-[0.98] transition-transform">
+                            Thanh toán ngay
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        const GreenFitHub = ({ showToast }) => {
+            const [isScanning, setIsScanning] = useState(false);
+            const [scanResult, setScanResult] = useState(null);
+
+            const handleScan = () => {
+                setIsScanning(true);
+                setScanResult(null);
+                setTimeout(() => {
+                    setIsScanning(false);
+                    setScanResult("Gợi ý: Áo sơ mi Linen + Quần jeans tái chế 👖");
+                    showToast('Phân tích hoàn tất!');
+                }, 2000);
             };
 
             return (
-                <div className="min-h-screen bg-bgPrimary text-textDark font-sans">
+                <div className="pt-4 pb-24 px-4 max-w-4xl mx-auto">
+                    <div className="bg-white rounded-2xl p-6 mb-6 shadow-sm border border-accentGreen/20">
+                        <h2 className="text-2xl font-bold mb-1 text-accentDarkGreen font-serif flex items-center">
+                            Green Inspire Zone 🌿
+                        </h2>
+                        <p className="text-xs text-gray-500">Cộng đồng sống xanh & thời trang bền vững</p>
+                    </div>
+
+                    <div className="bg-gradient-to-br from-accentDarkGreen to-accentGreen rounded-2xl p-8 text-center text-white shadow-lg mb-6">
+                        <h3 className="text-xl font-bold mb-2">AI Phối Đồ Bền Vững</h3>
+                        <p className="text-sm opacity-90 mb-6">Tải ảnh tủ đồ của bạn lên để nhận gợi ý mix-match!</p>
+                        
+                        <div className="w-full h-40 border-2 border-dashed border-white/50 rounded-xl flex flex-col items-center justify-center bg-white/10 mb-4 cursor-pointer hover:bg-white/20 transition-colors" onClick={handleScan}>
+                            {isScanning ? (
+                                <div className="loader border-white border-t-transparent"></div>
+                            ) : (
+                                <>
+                                    <Icons.Camera className="w-10 h-10 mb-2 opacity-80" />
+                                    <span className="text-xs font-bold">Chạm để tải ảnh lên</span>
+                                </>
+                            )}
+                        </div>
+
+                        {scanResult && (
+                            <div className="bg-white text-accentDarkGreen p-4 rounded-xl font-bold shadow-md animate-fade-in-down">
+                                {scanResult}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const ProfileView = () => (
+            <div className="pt-4 pb-24 px-4 max-w-4xl mx-auto">
+                <div className="bg-white rounded-2xl p-6 mb-6 shadow-sm flex items-center">
+                    <div className="w-16 h-16 rounded-full bg-accentGreen/20 flex items-center justify-center text-2xl mr-4 border-2 border-white shadow-sm">
+                        👤
+                    </div>
+                    <div>
+                        <h2 className="font-bold text-lg text-textDark">Khách hàng Thân thiết</h2>
+                        <p className="text-sm text-accentDarkGreen font-medium">Hạng Bạc • 550 điểm</p>
+                    </div>
+                </div>
+
+                <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
+                    <div className="p-4 border-b border-gray-50 flex justify-between items-center hover:bg-gray-50 cursor-pointer">
+                        <span className="text-sm font-medium text-textDark">Đơn hàng của tôi</span>
+                        <span className="text-gray-400 text-xs">3 đơn ></span>
+                    </div>
+                    <div className="p-4 border-b border-gray-50 flex justify-between items-center hover:bg-gray-50 cursor-pointer">
+                        <span className="text-sm font-medium text-textDark">Sổ địa chỉ</span>
+                        <span className="text-gray-400 text-xs">></span>
+                    </div>
+                    <div className="p-4 flex justify-between items-center hover:bg-gray-50 cursor-pointer">
+                        <span className="text-sm font-medium text-danger">Đăng xuất</span>
+                    </div>
+                </div>
+            </div>
+        );
+
+        // --- MAIN APP ---
+        const App = () => {
+            const [view, setView] = useState('home');
+            const [cart, setCart] = useState([]);
+            const [toast, setToast] = useState(null);
+            const [selectedProduct, setSelectedProduct] = useState(null);
+
+            // Logic thêm vào giỏ
+            const addToCart = (product) => {
+                setCart([...cart, product]);
+                setToast(`Đã thêm "${product.name}" vào giỏ!`);
+            };
+
+            // Logic xóa khỏi giỏ
+            const removeFromCart = (index) => {
+                const newCart = [...cart];
+                newCart.splice(index, 1);
+                setCart(newCart);
+                setToast('Đã xóa sản phẩm');
+            };
+
+            // Logic chọn sản phẩm để viết lời chúc
+            const handleSelectProduct = (product) => {
+                setSelectedProduct(product);
+                // Cuộn xuống phần tạo lời chúc nếu đang ở trang chủ
+                if (view === 'home') {
+                    setTimeout(() => {
+                        document.getElementById('greeting-section')?.scrollIntoView({ behavior: 'smooth' });
+                    }, 100);
+                } else {
+                    setView('home'); // Chuyển về trang chủ nếu đang ở trang khác
+                }
+            };
+
+            const handleCheckout = () => {
+                setToast('Tính năng thanh toán đang phát triển!');
+            };
+
+            const renderView = () => {
+                switch(view) {
+                    case 'home': return <HomeView selectedProduct={selectedProduct} onSelectProduct={handleSelectProduct} onAddCart={addToCart} showToast={setToast} />;
+                    case 'community': return <GreenFitHub showToast={setToast} />;
+                    case 'cart': return <CartView cart={cart} onRemove={removeFromCart} onCheckout={handleCheckout} />;
+                    case 'profile': return <ProfileView />;
+                    default: return <HomeView />;
+                }
+            };
+
+            return (
+                <div className="min-h-screen bg-bgPrimary text-textDark font-sans relative">
+                    {/* Global Toast */}
+                    {toast && <Toast message={toast} onClose={() => setToast(null)} />}
+
                     {/* Header */}
-                    <header className="fixed top-0 w-full bg-bgPrimary/95 backdrop-blur shadow-sm z-50 px-6 py-4 flex justify-between items-center">
-                        <h1 className="text-2xl font-bold text-accentDarkGreen font-serif cursor-pointer" onClick={() => setView('home')}>Dệt Mộc</h1>
-                        <button onClick={() => setView('cart')} className="text-accentDarkGreen"><ShoppingBagIcon /></button>
+                    <header className="fixed top-0 w-full bg-bgPrimary/90 backdrop-blur-md shadow-sm z-50 px-6 py-4 flex justify-between items-center transition-all">
+                        <h1 className="text-2xl font-bold text-accentDarkGreen font-serif cursor-pointer tracking-tight" onClick={() => setView('home')}>
+                            Dệt Mộc 🌿
+                        </h1>
+                        <button onClick={() => setView('cart')} className="text-accentDarkGreen relative p-2 rounded-full hover:bg-accentGreen/10 transition-colors">
+                            <Icons.ShoppingBag className="w-6 h-6" />
+                            {cart.length > 0 && (
+                                <span className="absolute top-1 right-1 bg-danger text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-bounce-short">
+                                    {cart.length}
+                                </span>
+                            )}
+                        </button>
                     </header>
 
                     {/* Main Content */}
-                    <main className="pt-16">
+                    <main className="pt-16 min-h-screen">
                         {renderView()}
                     </main>
 
-                    {/* Bottom Nav */}
-                    <nav className="fixed bottom-0 w-full bg-white border-t border-gray-200 py-3 px-6 flex justify-around shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-50">
-                        <button onClick={() => setView('home')} className={`flex flex-col items-center ${view === 'home' ? 'text-accentDarkGreen' : 'text-gray-400'}`}>
-                            <HomeIcon /> <span className="text-[10px] font-bold mt-1">Trang chủ</span>
-                        </button>
-                        <button onClick={() => setView('community')} className={`flex flex-col items-center ${view === 'community' ? 'text-accentDarkGreen' : 'text-gray-400'}`}>
-                            <LayersIcon /> <span className="text-[10px] font-bold mt-1">Cộng đồng</span>
-                        </button>
-                        <button onClick={() => setView('profile')} className={`flex flex-col items-center ${view === 'profile' ? 'text-accentDarkGreen' : 'text-gray-400'}`}>
-                            <UserIcon /> <span className="text-[10px] font-bold mt-1">Cá nhân</span>
-                        </button>
+                    {/* Bottom Navigation */}
+                    <nav className="fixed bottom-0 w-full bg-white border-t border-gray-100 py-2 px-6 flex justify-around shadow-[0_-10px_40px_-10px_rgba(0,0,0,0.05)] z-50 pb-safe">
+                        {[
+                            { id: 'home', icon: Icons.Home, label: 'Trang chủ' },
+                            { id: 'community', icon: Icons.Layers, label: 'Cộng đồng' },
+                            { id: 'profile', icon: Icons.User, label: 'Cá nhân' },
+                        ].map((item) => {
+                            const isActive = view === item.id;
+                            const IconComp = item.icon;
+                            return (
+                                <button 
+                                    key={item.id} 
+                                    onClick={() => setView(item.id)} 
+                                    className={`flex flex-col items-center justify-center w-16 h-14 transition-all duration-300 ${isActive ? 'text-accentDarkGreen -translate-y-1' : 'text-gray-300'}`}
+                                >
+                                    <IconComp className={`w-6 h-6 mb-1 ${isActive ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+                                    <span className={`text-[10px] font-bold ${isActive ? 'opacity-100' : 'opacity-0'}`}>{item.label}</span>
+                                </button>
+                            );
+                        })}
                     </nav>
                 </div>
             );
         };
 
-        // Kích hoạt React
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
