@@ -1,20 +1,31 @@
-import React, { useState } from 'react';
-import { ShoppingBag, User, Home, Heart, Zap, MoreHorizontal, Shirt, Layers, DollarSign } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ShoppingBag, User, Home, Heart, Zap, MoreHorizontal, Shirt, Layers, DollarSign, X } from 'lucide-react';
 
-// --- Cấu hình Tailwind CSS và Màu Pastel Mới (từ ảnh 2) ---
+/**
+ * DET MOC - SUSTAINABLE LIFESTYLE APP
+ * * Technical Stack: React, Tailwind CSS, Lucide React icons.
+ * API: Google Gemini API for generating vintage greetings.
+ * Design System: Earthy tones (Pastel Cream, Green, Warm Brown).
+ */
+
+// --- Configuration & Constants ---
+
 const TONE = {
-  BG_PRIMARY: '#F7F6F0', // Màu kem/be sáng nhất từ ảnh 2
-  ACCENT_YELLOW: '#FCEB9C', // Màu vàng nhạt từ ảnh 2
-  ACCENT_GREEN: '#A2D396', // Màu xanh lá nhạt từ ảnh 2
-  ACCENT_DARK_GREEN: '#6A994E', // Màu xanh lá đậm hơn cho chữ nổi bật (dùng cho các chi tiết nổi bật)
-  // ĐÃ CẬP NHẬT THEO YÊU CẦU: Màu nâu đậm ấm áp mới
-  TEXT_DARK: '#5b402f', // Màu nâu đậm ấm áp mới (#5b402f)
-  SHADOW_LIGHT: 'rgba(162, 211, 150, 0.4)', // Bóng từ màu xanh lá nhạt
+  BG_PRIMARY: '#F7F6F0',       // Cream/Beige background
+  ACCENT_YELLOW: '#FCEB9C',    // Soft Yellow
+  ACCENT_GREEN: '#A2D396',     // Pastel Green
+  ACCENT_DARK_GREEN: '#6A994E',// Deep Green for emphasis
+  TEXT_DARK: '#5b402f',        // Warm Brown for text
+  SHADOW_LIGHT: 'rgba(162, 211, 150, 0.4)',
   INPUT_BG: '#FFFFFF',
-  GRADIENT_BG: `linear-gradient(135deg, #FCEB9C 0%, #F7F6F0 50%, #A2D396 100%)`, // Gradient lấy cảm hứng từ ảnh 2
+  GRADIENT_BG: `linear-gradient(135deg, #FCEB9C 0%, #F7F6F0 50%, #A2D396 100%)`,
 };
 
-// --- Dữ liệu giả lập sản phẩm ---
+const API_KEY = ""; // Validated at runtime by the environment
+const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${API_KEY}`;
+
+// --- Mock Data ---
+
 const products = [
   { id: 1, name: "Nến Thơm Bã Cà Phê", price: "95.000", ecoTag: "Tái Sinh", icon: "☕" },
   { id: 2, name: "Thiệp Giấy Hạt Giống", price: "45.000", ecoTag: "Gieo Mầm", icon: "🌱" },
@@ -22,56 +33,70 @@ const products = [
   { id: 4, name: "Dreamcatcher Vải Thừa", price: "120.000", ecoTag: "Giảm Rác", icon: "🌙" },
 ];
 
-// --- Các tính năng nổi bật (lấy cảm hứng từ MBBank) ---
 const features = [
-  { icon: <Zap size={28} />, title: "Quà tặng Độc đáo", desc: "Không đụng hàng" },
-  { icon: <Heart size={28} />, title: "Thân thiện Môi trường", desc: "Bền vững từ tâm" },
-  { icon: <MoreHorizontal size={28} />, title: "Chăm sóc Cá nhân", desc: "Lời chúc ý nghĩa" },
+  { icon: <Zap size={28} />, title: "Độc Bản", desc: "Mỗi món quà là duy nhất" },
+  { icon: <Heart size={28} />, title: "Bền Vững", desc: "Thân thiện với Trái Đất" },
+  { icon: <MoreHorizontal size={28} />, title: "Trao Gửi", desc: "Gói ghém trọn yêu thương" },
 ];
 
-// --- API Configuration ---
-const API_KEY = ""; // Leave as-is
-const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${API_KEY}`;
-
-
-// --- Components ---
+// --- Shared Components ---
 
 /**
- * Component Tích hợp Gemini API để tạo lời chúc vintage
+ * Toast Notification Component
+ * Replaces native browser alerts for a better UX.
  */
-const GreetingCardGenerator = ({ selectedProduct }) => {
+const Toast = ({ message, onClose }) => {
+  if (!message) return null;
+  return (
+    <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[100] animate-fade-in-down">
+      <div className="bg-white px-6 py-3 rounded-full shadow-lg border flex items-center gap-3"
+           style={{ borderColor: TONE.ACCENT_DARK_GREEN, color: TONE.TEXT_DARK }}>
+        <span className="text-xl">🌿</span>
+        <span className="font-medium text-sm font-sans">{message}</span>
+        <button onClick={onClose} className="hover:opacity-70">
+          <X size={16} />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * AI Generator Component
+ * Uses Google Gemini to create vintage-style greeting messages.
+ */
+const GreetingCardGenerator = ({ selectedProduct, showToast }) => {
   const [occasion, setOccasion] = useState('');
   const [tone, setTone] = useState('');
   const [generatedText, setGeneratedText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Exponential Backoff Strategy for API calls
   const fetchWithExponentialBackoff = async (url, options, maxRetries = 5, delay = 1000) => {
     for (let i = 0; i < maxRetries; i++) {
-        try {
-            const response = await fetch(url, options);
-            if (response.status !== 429 && response.ok) { 
-                return response;
-            }
-            if (response.status === 429 && i < maxRetries - 1) { 
-                await new Promise(resolve => setTimeout(resolve, delay * (2 ** i) + Math.random() * 1000));
-            } else {
-                return response; 
-            }
-        } catch (error) {
-            if (i < maxRetries - 1) {
-                await new Promise(resolve => setTimeout(resolve, delay * (2 ** i) + Math.random() * 1000));
-            } else {
-                throw error;
-            }
+      try {
+        const response = await fetch(url, options);
+        if (response.status !== 429 && response.ok) return response;
+        if (response.status === 429 && i < maxRetries - 1) {
+          await new Promise(resolve => setTimeout(resolve, delay * (2 ** i) + Math.random() * 1000));
+        } else {
+          return response;
         }
+      } catch (error) {
+        if (i < maxRetries - 1) {
+          await new Promise(resolve => setTimeout(resolve, delay * (2 ** i) + Math.random() * 1000));
+        } else {
+          throw error;
+        }
+      }
     }
     throw new Error('API request failed after multiple retries.');
   };
 
   const generateGreeting = async () => {
     if (!occasion || !tone) {
-      setError('Vui lòng điền đầy đủ Dịp tặng và Cảm xúc.');
+      showToast('Vui lòng nhập dịp tặng và cảm xúc mong muốn!');
       return;
     }
 
@@ -79,570 +104,552 @@ const GreetingCardGenerator = ({ selectedProduct }) => {
     setIsLoading(true);
     setGeneratedText('');
 
-    // ĐÃ CẬP NHẬT: Thay thế Grift bằng Dệt Mộc trong System Prompt
     const systemPrompt = `Bạn là chuyên gia viết lời chúc thư pháp, vintage và ấm áp cho thương hiệu quà tặng thân thiện môi trường Dệt Mộc. Lời chúc cần ngắn gọn (tối đa 3 câu), tập trung vào ý nghĩa tái sinh, thiên nhiên và sự trân trọng.`;
     const userQuery = `Hãy viết một lời chúc mừng cho sản phẩm "${selectedProduct.name}" nhân dịp "${occasion}", với tông điệu "${tone}". Nhấn mạnh tính thủ công và sự ấm áp của món quà.`;
 
     const payload = {
-        contents: [{ parts: [{ text: userQuery }] }],
-        systemInstruction: {
-            parts: [{ text: systemPrompt }]
-        },
+      contents: [{ parts: [{ text: userQuery }] }],
+      systemInstruction: { parts: [{ text: systemPrompt }] },
     };
 
     try {
-        const response = await fetchWithExponentialBackoff(API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
+      const response = await fetchWithExponentialBackoff(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
 
-        const result = await response.json();
-        const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+      const result = await response.json();
+      const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
 
-        if (text) {
-            setGeneratedText(text);
-        } else {
-            setError('Không thể tạo lời chúc. Vui lòng thử lại.');
-        }
+      if (text) {
+        setGeneratedText(text);
+      } else {
+        setError('Không thể tạo lời chúc. Vui lòng thử lại.');
+      }
     } catch (e) {
-        console.error('Gemini API Error:', e);
-        setError('Có lỗi xảy ra khi kết nối API. Vui lòng kiểm tra console.');
+      console.error('Gemini API Error:', e);
+      setError('Lỗi kết nối API. Vui lòng thử lại sau.');
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
   };
-  
-
 
   return (
-    <div className="p-4 mt-6 rounded-xl shadow-inner border border-dashed" style={{ backgroundColor: TONE.INPUT_BG, borderColor: TONE.ACCENT_GREEN }}>
+    <div className="p-5 mt-6 rounded-xl shadow-inner border border-dashed bg-opacity-50 backdrop-blur-sm" 
+         style={{ backgroundColor: TONE.INPUT_BG, borderColor: TONE.ACCENT_GREEN }}>
       <h3 className="text-xl font-bold mb-3 flex items-center" style={{ color: TONE.ACCENT_DARK_GREEN, fontFamily: 'Playfair Display, serif' }}>
-        <Zap size={20} className="mr-2"/> Đề Xuất Lời Chúc ✨
+        <Zap size={20} className="mr-2"/> Trợ lý Lời Chúc AI
       </h3>
-      <p className="text-sm mb-4" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>Tạo lời chúc cá nhân hóa theo phong cách Dệt Mộc.</p>
+      <p className="text-sm mb-4" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>
+        Để Dệt Mộc giúp bạn gói ghém tâm tư thành những dòng chữ ý nghĩa.
+      </p>
       
-      <div className="space-y-3">
+      <div className="space-y-4">
         <div>
-          <label className="block text-xs font-medium mb-1" style={{color: TONE.TEXT_DARK, fontFamily: 'Inter, sans-serif'}}>Sản phẩm:</label>
-          <input 
-            type="text" 
-            value={selectedProduct.name} 
-            disabled 
-            className="w-full p-2 border rounded-lg bg-gray-100 text-sm"
-            style={{ borderColor: TONE.ACCENT_GREEN, fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}
-          />
+          <label className="block text-xs font-semibold uppercase tracking-wide mb-1 opacity-70" style={{color: TONE.TEXT_DARK}}>Sản phẩm</label>
+          <div className="w-full p-2.5 border rounded-lg bg-gray-50 text-sm font-medium"
+               style={{ borderColor: TONE.ACCENT_GREEN, color: TONE.TEXT_DARK }}>
+            {selectedProduct.name}
+          </div>
         </div>
 
         <div>
-          <label className="block text-xs font-medium mb-1" style={{color: TONE.TEXT_DARK, fontFamily: 'Inter, sans-serif'}}>Dịp tặng quà:</label>
+          <label className="block text-xs font-semibold uppercase tracking-wide mb-1 opacity-70" style={{color: TONE.TEXT_DARK}}>Dịp tặng quà</label>
           <input 
             type="text" 
             value={occasion} 
             onChange={(e) => setOccasion(e.target.value)} 
-            className="w-full p-2 border rounded-lg focus:ring-1 focus:outline-none text-sm"
-            style={{ borderColor: TONE.ACCENT_GREEN, backgroundColor: TONE.INPUT_BG, fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}
-            placeholder="Sinh nhật, Lễ Tốt Nghiệp..."
+            className="w-full p-2.5 border rounded-lg focus:ring-1 focus:outline-none text-sm transition-all"
+            style={{ borderColor: TONE.ACCENT_GREEN, color: TONE.TEXT_DARK }}
+            placeholder="VD: Sinh nhật, Kỷ niệm, Làm quen..."
           />
         </div>
 
         <div>
-          <label className="block text-xs font-medium mb-1" style={{color: TONE.TEXT_DARK, fontFamily: 'Inter, sans-serif'}}>Tông điệu:</label>
+          <label className="block text-xs font-semibold uppercase tracking-wide mb-1 opacity-70" style={{color: TONE.TEXT_DARK}}>Cảm xúc chủ đạo</label>
           <input 
             type="text" 
             value={tone} 
             onChange={(e) => setTone(e.target.value)} 
-            className="w-full p-2 border rounded-lg focus:ring-1 focus:outline-none text-sm"
-            style={{ borderColor: TONE.ACCENT_GREEN, backgroundColor: TONE.INPUT_BG, fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}
-            placeholder="Vui vẻ, Tôn trọng, Ấm áp..."
+            className="w-full p-2.5 border rounded-lg focus:ring-1 focus:outline-none text-sm transition-all"
+            style={{ borderColor: TONE.ACCENT_GREEN, color: TONE.TEXT_DARK }}
+            placeholder="VD: Chân thành, Hài hước, Lãng mạn..."
           />
         </div>
         
-        {error && <p className="text-red-500 text-xs mt-2" style={{ fontFamily: 'Inter, sans-serif' }}>{error}</p>}
+        {error && <p className="text-red-500 text-xs mt-2 font-medium">{error}</p>}
         
         <button 
           onClick={generateGreeting} 
           disabled={isLoading}
-          className="w-full py-2 rounded-lg text-white font-semibold text-sm hover:opacity-90 transition-opacity flex items-center justify-center disabled:opacity-50"
-          style={{ backgroundColor: TONE.ACCENT_DARK_GREEN, fontFamily: 'Inter, sans-serif' }}
+          className="w-full py-2.5 rounded-lg text-white font-bold text-sm shadow-md hover:shadow-lg transform active:scale-95 transition-all flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{ backgroundColor: TONE.ACCENT_DARK_GREEN }}
         >
           {isLoading ? (
-            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
+            <div className="flex items-center">
+              <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+              Đang viết...
+            </div>
           ) : (
-            <>
-              Tạo Lời Chúc ✨
-            </>
+            <>✨ Tạo Lời Chúc</>
           )}
         </button>
       </div>
 
       {generatedText && (
-        <div className="mt-4 p-3 border rounded-lg bg-gray-50" style={{ borderColor: TONE.ACCENT_GREEN }}>
-          <p className="text-xs font-medium" style={{color: TONE.ACCENT_DARK_GREEN, fontFamily: 'Inter, sans-serif'}}>Lời Chúc Đề Xuất:</p>
-          <p className="mt-1 text-sm italic leading-relaxed" style={{ color: TONE.TEXT_DARK, fontFamily: 'Lora, serif' }}>
-            {generatedText}
+        <div className="mt-5 p-4 border rounded-lg bg-[#faf9f6] relative overflow-hidden" style={{ borderColor: TONE.ACCENT_YELLOW }}>
+          <div className="absolute top-0 left-0 w-1 h-full" style={{ backgroundColor: TONE.ACCENT_DARK_GREEN }}></div>
+          <p className="text-xs font-bold uppercase mb-2" style={{color: TONE.ACCENT_DARK_GREEN}}>Lời chúc của bạn:</p>
+          <p className="text-base italic leading-relaxed" style={{ color: TONE.TEXT_DARK, fontFamily: 'Lora, serif' }}>
+            "{generatedText}"
           </p>
-          {/* ĐÃ CẬP NHẬT: Thay thế Grift bằng Dệt Mộc */}
-          <p className="text-right text-xs mt-2 text-gray-500" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>— Dệt Mộc x Gemini AI</p>
+          <p className="text-right text-[10px] mt-3 opacity-60 font-sans uppercase tracking-widest">— Dệt Mộc AI</p>
         </div>
       )}
     </div>
   );
 };
 
-
-/**
- * Hiển thị thẻ sản phẩm (Mobile App Style)
- */
-const ProductCard = ({ product, onSelectProduct }) => {
+const ProductCard = ({ product, onSelectProduct, onAddToCart }) => {
   return (
     <div 
-      className="w-full bg-white rounded-xl shadow-md transition-all duration-300 transform hover:scale-[1.02] cursor-pointer overflow-hidden flex flex-col"
+      className="w-full bg-white rounded-xl shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 overflow-hidden flex flex-col h-full"
       style={{ boxShadow: `0 4px 12px ${TONE.SHADOW_LIGHT}` }}
     >
-      {/* Hình ảnh sản phẩm (Hiển thị icon) */}
-      <div className="h-40 flex items-center justify-center rounded-t-xl overflow-hidden" 
-           style={{backgroundColor: TONE.ACCENT_YELLOW}}> {/* Nền vàng nhạt */}
-        <span className="text-5xl">{product.icon}</span>
+      <div className="h-40 flex items-center justify-center relative" style={{backgroundColor: TONE.ACCENT_YELLOW}}>
+        <span className="text-6xl filter drop-shadow-sm transform hover:scale-110 transition-transform cursor-default">{product.icon}</span>
+        <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm"
+             style={{ color: TONE.ACCENT_DARK_GREEN }}>
+          {product.ecoTag}
+        </div>
       </div>
       
-      {/* Thông tin sản phẩm */}
-      <div className="p-3 flex flex-col justify-between flex-grow">
+      <div className="p-4 flex flex-col justify-between flex-grow">
         <div>
-            <div className="text-xs font-medium uppercase tracking-wider px-2 py-0.5 rounded-full inline-block" 
-                style={{ backgroundColor: TONE.ACCENT_GREEN, color: 'white', fontFamily: 'Inter, sans-serif' }}> {/* Eco tag màu xanh lá */}
-              {product.ecoTag}
-            </div>
-            {/* Tên sản phẩm dùng màu TEXT_DARK */}
-            <h3 className="text-lg font-semibold mt-2 truncate" style={{color: TONE.TEXT_DARK, fontFamily: 'Quicksand, sans-serif'}}>{product.name}</h3>
-            <p className="text-xl font-bold mt-1" style={{color: TONE.ACCENT_DARK_GREEN, fontFamily: 'Playfair Display, serif'}}>{product.price}₫</p>
+          <h3 className="text-lg font-bold truncate" style={{color: TONE.TEXT_DARK, fontFamily: 'Quicksand, sans-serif'}}>{product.name}</h3>
+          <p className="text-xl font-black mt-1" style={{color: TONE.ACCENT_DARK_GREEN, fontFamily: 'Playfair Display, serif'}}>{product.price}₫</p>
         </div>
         
-        <button 
-            onClick={() => onSelectProduct(product)}
-            className="mt-3 w-full py-2 rounded-lg text-white font-semibold text-sm hover:opacity-90 transition-opacity"
-            style={{ backgroundColor: TONE.ACCENT_DARK_GREEN, fontFamily: 'Inter, sans-serif' }}
-        >
+        <div className="mt-4 space-y-2">
+          <button 
+            onClick={() => onAddToCart(product.name)}
+            className="w-full py-2 rounded-lg text-white font-semibold text-sm hover:opacity-90 active:scale-95 transition-all shadow-sm"
+            style={{ backgroundColor: TONE.ACCENT_DARK_GREEN }}
+          >
             Thêm vào Giỏ
-        </button>
-        <button 
+          </button>
+          <button 
             onClick={() => onSelectProduct(product)}
-            className="mt-1 w-full py-2 rounded-lg text-sm font-semibold transition-colors border"
-            style={{ borderColor: TONE.ACCENT_DARK_GREEN, color: TONE.ACCENT_DARK_GREEN, backgroundColor: TONE.BG_PRIMARY, fontFamily: 'Inter, sans-serif' }}
-        >
-            Tạo Lời Chúc
-        </button>
+            className="w-full py-2 rounded-lg text-sm font-semibold border hover:bg-gray-50 active:scale-95 transition-all"
+            style={{ borderColor: TONE.ACCENT_DARK_GREEN, color: TONE.ACCENT_DARK_GREEN }}
+          >
+            Viết Lời Chúc
+          </button>
+        </div>
       </div>
     </div>
   );
 };
 
-// --- Mobile/Desktop Header - ĐÃ CẬP NHẬT: Chỉ giữ lại Logo và Giỏ hàng ---
-const MobileHeader = ({ setActiveView }) => {
+// --- Layout Components ---
+
+const Header = ({ setActiveView, cartCount }) => {
   return (
-    // Header không cố định trên desktop.
-    <header className="py-4 px-6 flex justify-between items-center shadow-sm w-full" 
-            style={{ backgroundColor: TONE.BG_PRIMARY }}>
-        <div className="max-w-4xl mx-auto w-full flex justify-between items-center">
-            {/* Logo - ĐÃ CẬP NHẬT: Thay thế Grift bằng Dệt Mộc */}
-            <h1 className="text-2xl font-bold" style={{ fontFamily: 'DM Serif Display, serif', color: TONE.ACCENT_DARK_GREEN }}>Dệt Mộc</h1>
-            
-            {/* Cart Icon */}
-            <button onClick={() => setActiveView('cart')} className="text-gray-600">
-                <ShoppingBag size={24} style={{ color: TONE.ACCENT_DARK_GREEN }} />
-            </button>
+    <header className="sticky top-0 z-40 py-3 px-6 shadow-sm backdrop-blur-md bg-opacity-90 transition-all" 
+            style={{ backgroundColor: '#ffffffdd' }}>
+      <div className="max-w-4xl mx-auto w-full flex justify-between items-center">
+        <div 
+          onClick={() => setActiveView('home')}
+          className="cursor-pointer flex items-center gap-2"
+        >
+          <span className="text-2xl">🌿</span>
+          <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: 'DM Serif Display, serif', color: TONE.ACCENT_DARK_GREEN }}>
+            Dệt Mộc
+          </h1>
         </div>
+        
+        <button onClick={() => setActiveView('cart')} className="relative p-2 rounded-full hover:bg-gray-100 transition-colors">
+          <ShoppingBag size={24} style={{ color: TONE.TEXT_DARK }} />
+          {cartCount > 0 && (
+            <span className="absolute top-0 right-0 h-5 w-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center animate-bounce">
+              {cartCount}
+            </span>
+          )}
+        </button>
+      </div>
     </header>
   );
 };
 
-// --- Thanh Tab Bar Cố Định ở Dưới - THAY THẾ CHO THANH ĐIỀU HƯỚNG CŨ ---
-const MobileBottomBar = ({ activeView, setActiveView }) => {
-    // Hàm trợ giúp để quyết định màu chữ cho nút điều hướng
-    const getNavColor = (viewName) => {
-        return activeView === viewName ? TONE.ACCENT_DARK_GREEN : TONE.TEXT_DARK;
-    };
-
-    // Định nghĩa các mục điều hướng với Icon và Text
-    // ĐÃ CẬP NHẬT: Tên Green Gift, Green Fit vẫn giữ nguyên để phù hợp với Icon/Mục đích
-    const navItems = [
-        { name: 'home', label: 'Green Gift', Icon: Home },
-        { name: 'greenfit', label: 'Green Fit', Icon: Layers },
-        { name: 'shop', label: 'Ưu Đãi', Icon: DollarSign },
-        { name: 'profile', label: 'Cá Nhân', Icon: User },
-    ];
-
-    return (
-        <div className="fixed bottom-0 left-0 right-0 z-50 shadow-lg border-t border-gray-200"
-             style={{ backgroundColor: TONE.BG_PRIMARY }}>
-            <div className="max-w-4xl mx-auto flex justify-around items-center h-16">
-                {navItems.map(({ name, label, Icon }) => (
-                    <button 
-                        key={name}
-                        onClick={() => setActiveView(name)}
-                        className="flex flex-col items-center justify-center p-1 transition-colors"
-                        style={{ color: getNavColor(name) }}
-                    >
-                        <Icon size={24} className="mb-0.5" />
-                        <span className="text-xs font-semibold" style={{ fontFamily: 'Quicksand, sans-serif' }}>{label}</span>
-                    </button>
-                ))}
-            </div>
-        </div>
-    );
-};
-
-
-/**
- * Trang Chủ (Mobile App Layout) - Green Production & Commerce Zone
- */
-const HomeView = () => {
-  const [selectedProduct, setSelectedProduct] = useState(null);
+const BottomNavigation = ({ activeView, setActiveView }) => {
+  const navItems = [
+    { id: 'home', label: 'Trang chủ', Icon: Home },
+    { id: 'greenfit', label: 'Cộng đồng', Icon: Layers },
+    { id: 'shop', label: 'Ưu đãi', Icon: DollarSign },
+    { id: 'profile', label: 'Cá nhân', Icon: User },
+  ];
 
   return (
-    // ĐÃ CẬP NHẬT: Thêm padding bottom (pb-24) để nội dung không bị thanh tab bar che mất
-    <div className="pt-8 pb-24 min-h-screen relative" style={{ background: TONE.GRADIENT_BG }}>
-      {/* Container giới hạn chiều rộng trên desktop */}
-      <div className="max-w-4xl mx-auto p-4">
-        
-        {/* Banner Chính - Lấy cảm hứng từ MBBank */}
-        <div className="bg-white rounded-xl p-6 mb-6 shadow-md" style={{ boxShadow: `0 8px 20px ${TONE.SHADOW_LIGHT}` }}>
-          {/* Tiêu đề dùng màu ACCENT_DARK_GREEN - ĐÃ CẬP NHẬT: Thay thế Grift bằng Dệt Mộc */}
-          <h2 className="text-2xl font-bold mb-3" style={{ fontFamily: 'Playfair Display, serif', color: TONE.ACCENT_DARK_GREEN }}>Dệt Mộc - Quà tặng ý nghĩa</h2>
-          {/* Mô tả dùng TEXT_DARK */}
-          <p className="text-base mb-4" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>
-            Khám phá những món quà độc đáo, thân thiện với môi trường, được làm thủ công từ tâm huyết.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center mt-4">
-            {features.map((feature, index) => (
-              <div key={index} className="flex flex-col items-center p-3 bg-gray-50 rounded-lg shadow-sm" style={{borderColor: TONE.ACCENT_YELLOW, borderWidth: '1px'}}>
-                <span className="mb-1" style={{color: TONE.ACCENT_DARK_GREEN}}>{feature.icon}</span>
-                {/* Title và Desc đều dùng TEXT_DARK */}
-                <p className="text-sm font-semibold" style={{fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK}}>{feature.title}</p>
-                <p className="text-xs text-gray-500" style={{fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK}}>{feature.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Phần "Sản phẩm nổi bật" - Tiêu đề dùng màu TEXT_DARK */}
-        <h3 className="text-xl font-bold mb-4" style={{color: TONE.TEXT_DARK, fontFamily: 'Quicksand, sans-serif'}}>Sản phẩm dành cho bạn</h3>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"> {/* Tăng số cột trên desktop */}
-          {products.map(p => 
-            <ProductCard 
-              key={p.id} 
-              product={p} 
-              onSelectProduct={setSelectedProduct} 
-            />
-          )}
-        </div>
-        
-        {/* Tích hợp Gemini API */}
-        {selectedProduct && (
-          <div className="mt-8 max-w-2xl mx-auto"> {/* Thu hẹp khung AI trên desktop */}
-             <GreetingCardGenerator selectedProduct={selectedProduct} />
-          </div>
-        )}
-
+    <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] pb-safe">
+      <div className="max-w-4xl mx-auto flex justify-around items-center h-16 px-2">
+        {navItems.map(({ id, label, Icon }) => {
+          const isActive = activeView === id;
+          return (
+            <button 
+              key={id}
+              onClick={() => setActiveView(id)}
+              className={`flex flex-col items-center justify-center w-full h-full transition-all duration-300 ${isActive ? '-translate-y-1' : ''}`}
+            >
+              <Icon 
+                size={isActive ? 26 : 24} 
+                style={{ color: isActive ? TONE.ACCENT_DARK_GREEN : '#9CA3AF' }} 
+                strokeWidth={isActive ? 2.5 : 2}
+              />
+              <span 
+                className={`text-[10px] font-bold mt-1 transition-colors ${isActive ? 'opacity-100' : 'opacity-60'}`}
+                style={{ color: isActive ? TONE.ACCENT_DARK_GREEN : TONE.TEXT_DARK, fontFamily: 'Quicksand, sans-serif' }}
+              >
+                {label}
+              </span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
 };
 
-/**
- * CẬP NHẬT: Trang Green Inspire Zone (Green Fit) - Mạng xã hội thời trang bền vững
- */
-const GreenFitHub = () => {
-    // Giữ lại state GreenPoints để mô phỏng điểm số hiện tại
-    const [greenPoints, setGreenPoints] = useState(550);
-    const [aiOutfit, setAiOutfit] = useState('Chưa có gợi ý');
-    const [isGenerating, setIsGenerating] = useState(false);
+// --- View Components ---
 
-    const generateOutfit = () => {
-        setIsGenerating(true);
-        setTimeout(() => {
-            const outfits = [
-                "Áo sơ mi linen trắng + Quần culottes be (Phong cách Tối giản)",
-                "Váy midi hoa nhí (vintage) + Túi cói thủ công (Phong cách Du mục)",
-                "Áo phông tái chế + Quần jeans ống rộng (đã wax) + Giày canvas (Phong cách Street)",
-            ];
-            const randomOutfit = outfits[Math.floor(Math.random() * outfits.length)];
-            setAiOutfit(randomOutfit);
-            setIsGenerating(false);
-        }, 1500);
-    };
+const HomeView = ({ showToast, addToCart }) => {
+  const [selectedProduct, setSelectedProduct] = useState(null);
 
-    return (
-        // ĐÃ CẬP NHẬT: Thêm padding bottom (pb-24) để nội dung không bị thanh tab bar che mất
-        <div className="pt-8 pb-24 min-h-screen relative" style={{ background: TONE.GRADIENT_BG }}>
-            <div className="max-w-4xl mx-auto p-4">
-                {/* Banner Green Inspire Zone */}
-                <div className="bg-white rounded-xl p-6 mb-6 shadow-md" style={{ boxShadow: `0 8px 20px ${TONE.SHADOW_LIGHT}` }}>
-                    <h2 className="text-2xl font-bold mb-2 flex items-center" style={{ fontFamily: 'Playfair Display, serif', color: TONE.ACCENT_DARK_GREEN }}>
-                        <Heart size={28} className="mr-3" /> Green Inspire Zone: Lan Tỏa Sống Xanh 
-                    </h2>
-                    <p className="text-sm" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>
-                        Không gian chia sẻ outfits, mẹo tái chế và trao đổi đồ, nhận GreenPoints cho mỗi hành động tích cực!
-                    </p>
-                </div>
+  const handleSelectProduct = (product) => {
+    setSelectedProduct(product);
+    // Smooth scroll to generator
+    const element = document.getElementById('ai-generator');
+    if (element) element.scrollIntoView({ behavior: 'smooth' });
+  };
 
-                {/* Khu vực Greenpoints - Chỉ hiển thị điểm và liên kết đến Profile */}
-                <div className="bg-white rounded-xl p-5 mb-6 shadow-md flex justify-between items-center" style={{ border: `1px solid ${TONE.ACCENT_YELLOW}` }}>
-                    <div className="flex items-center">
-                        <Layers size={32} style={{ color: TONE.ACCENT_DARK_GREEN }} className="mr-4"/>
-                        <div>
-                            {/* Chữ thường dùng TEXT_DARK */}
-                            <p className="text-sm" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>Điểm Xanh Hiện Có</p>
-                            <p className="text-3xl font-bold" style={{ color: TONE.ACCENT_DARK_GREEN, fontFamily: 'Quicksand, sans-serif' }}>{greenPoints}</p>
-                        </div>
-                    </div>
-                    <button className="py-2 px-4 rounded-lg text-white font-semibold text-sm hover:opacity-90 transition-opacity"
-                        style={{ backgroundColor: TONE.ACCENT_DARK_GREEN, fontFamily: 'Inter, sans-serif' }}
-                        onClick={() => alert("Xem chi tiết Green Profile tại mục Cá Nhân!")}>
-                        Chi Tiết Profile
-                    </button>
-                </div>
-
-                {/* Công cụ AI Phối đồ */}
-                <div className="bg-white rounded-xl p-6 mb-6 shadow-md" style={{ border: `1px dashed ${TONE.ACCENT_GREEN}` }}>
-                    {/* Tiêu đề dùng TEXT_DARK */}
-                    <h3 className="text-xl font-bold mb-3" style={{ color: TONE.TEXT_DARK, fontFamily: 'Quicksand, sans-serif' }}>AI Quét Đồ & Phối Trang Phục</h3>
-                    <p className="text-sm" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>
-                        Tải ảnh tủ đồ của bạn lên để nhận gợi ý phối đồ từ AI, giúp bạn "mặc đẹp mà không cần mua thêm".
-                    </p>
-                    
-                    <button 
-                        onClick={generateOutfit} 
-                        disabled={isGenerating}
-                        className="w-full py-3 rounded-lg text-white font-semibold text-base hover:opacity-90 transition-opacity flex items-center justify-center disabled:opacity-50"
-                        style={{ backgroundColor: TONE.ACCENT_DARK_GREEN, fontFamily: 'Inter, sans-serif' }}
-                    >
-                         {isGenerating ? (
-                            <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                          ) : (
-                            <>
-                              <Layers size={18} className="mr-2"/> Gợi ý Phối đồ
-                            </>
-                          )}
-                    </button>
-                    
-                    {/* Kết quả AI */}
-                    <div className="mt-4 p-4 rounded-lg bg-gray-50" style={{ borderColor: TONE.ACCENT_GREEN, border: '1px dashed' }}>
-                        <p className="text-xs font-medium" style={{color: TONE.ACCENT_DARK_GREEN, fontFamily: 'Inter, sans-serif'}}>Gợi ý hôm nay:</p>
-                        <p className="mt-1 text-base leading-relaxed" style={{ color: TONE.TEXT_DARK, fontFamily: 'Lora, serif' }}>
-                            {aiOutfit}
-                        </p>
-                    </div>
-                </div>
-                
-                {/* Khu vực Trao đổi Cộng đồng: Đổi tên thành Trao Đổi & Tặng Đồ (Swap) */}
-                <div className="bg-white rounded-xl p-6 shadow-md" style={{ border: `1px solid ${TONE.ACCENT_GREEN}` }}>
-                    {/* Tiêu đề dùng TEXT_DARK */}
-                    <h3 className="text-xl font-bold mb-4" style={{ color: TONE.TEXT_DARK, fontFamily: 'Quicksand, sans-serif' }}>Trao Đổi & Tặng Đồ (Swap)</h3>
-                    <p className="text-sm mb-4" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>
-                        Kéo dài vòng đời sản phẩm: Tặng đồ, đổi đồ cũ chất lượng và nhận GreenPoints.
-                    </p>
-                    <div className="space-y-3">
-                        {/* Item 1 - Đồ để Trao Đổi */}
-                        <div className="flex items-center p-3 bg-gray-50 rounded-lg shadow-sm">
-                            <Shirt size={24} style={{ color: TONE.ACCENT_DARK_GREEN }} className="mr-3"/>
-                            <div>
-                                <p className="font-semibold text-sm" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>Áo len Oversize (Đã giặt sạch)</p>
-                                <p className="text-xs" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>Người tặng: JaneDoe | Tình trạng: 95%</p>
-                            </div>
-                        </div>
-                        {/* Item 2 - Đồ để Bán/Đổi điểm */}
-                        <div className="flex items-center p-3 bg-gray-50 rounded-lg shadow-sm">
-                            <DollarSign size={24} style={{ color: TONE.ACCENT_DARK_GREEN }} className="mr-3"/>
-                            <div>
-                                <p className="font-semibold text-sm" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>Váy Denim cũ - Đổi lấy 50 Greenpoints</p>
-                                <p className="text-xs" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>Người bán: EcoUser21 | Cần 50 điểm</p>
-                            </div>
-                        </div>
-                        
-                        <button className="w-full py-2 rounded-lg text-sm font-semibold border mt-4" 
-                            style={{ borderColor: TONE.ACCENT_DARK_GREEN, color: TONE.ACCENT_DARK_GREEN, backgroundColor: TONE.BG_PRIMARY, fontFamily: 'Inter, sans-serif' }}
-                            onClick={() => alert("Đăng tải món đồ để trao đổi hoặc tặng ngay!")}>
-                            Đăng Món Đồ của Bạn
-                        </button>
-                    </div>
-                </div>
-
-            </div>
+  return (
+    <div className="pt-6 pb-32 px-4 max-w-4xl mx-auto animate-fade-in">
+      {/* Hero Banner */}
+      <div className="bg-white rounded-2xl p-6 mb-8 shadow-lg relative overflow-hidden group" 
+           style={{ borderLeft: `6px solid ${TONE.ACCENT_DARK_GREEN}` }}>
+        <div className="absolute right-[-20px] top-[-20px] opacity-10 transform rotate-12 group-hover:rotate-45 transition-transform duration-700">
+          <Heart size={150} color={TONE.ACCENT_DARK_GREEN} />
         </div>
-    );
+        <h2 className="text-3xl font-bold mb-3 relative z-10" style={{ fontFamily: 'Playfair Display, serif', color: TONE.ACCENT_DARK_GREEN }}>
+          Quà Tặng Từ Thiên Nhiên
+        </h2>
+        <p className="text-base mb-6 relative z-10 max-w-md" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>
+          Mỗi sản phẩm tại Dệt Mộc là một câu chuyện tái sinh. Hãy chọn món quà ý nghĩa cho người thương và Trái Đất.
+        </p>
+        
+        <div className="grid grid-cols-3 gap-2 mt-4">
+          {features.map((feature, index) => (
+            <div key={index} className="flex flex-col items-center p-3 bg-gray-50 rounded-xl border border-transparent hover:border-gray-200 transition-all">
+              <span className="mb-2 p-2 bg-white rounded-full shadow-sm" style={{color: TONE.ACCENT_DARK_GREEN}}>{feature.icon}</span>
+              <p className="text-xs font-bold uppercase tracking-wide" style={{color: TONE.TEXT_DARK}}>{feature.title}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Product Grid */}
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-xl font-bold" style={{color: TONE.TEXT_DARK, fontFamily: 'Quicksand, sans-serif'}}>Sản phẩm nổi bật</h3>
+        <span className="text-xs font-semibold underline cursor-pointer hover:opacity-70" style={{color: TONE.ACCENT_DARK_GREEN}}>Xem tất cả</span>
+      </div>
+      
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        {products.map(p => 
+          <ProductCard 
+            key={p.id} 
+            product={p} 
+            onSelectProduct={handleSelectProduct}
+            onAddToCart={addToCart}
+          />
+        )}
+      </div>
+      
+      {/* AI Generator Section */}
+      <div id="ai-generator">
+        {selectedProduct ? (
+          <GreetingCardGenerator selectedProduct={selectedProduct} showToast={showToast} />
+        ) : (
+          <div className="p-8 text-center border-2 border-dashed rounded-xl bg-white/50" style={{ borderColor: TONE.ACCENT_GREEN }}>
+            <p className="text-sm text-gray-500 italic">Chọn nút "Viết Lời Chúc" trên sản phẩm để kích hoạt AI ✨</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 };
 
+const GreenFitHub = ({ showToast }) => {
+  const [greenPoints, setGreenPoints] = useState(550);
+  const [aiOutfit, setAiOutfit] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
 
-/**
- * Trang Giỏ Hàng giả lập
- */
-const CartView = () => {
-    return (
-        // ĐÃ CẬP NHẬT: Thêm padding bottom (pb-24) để nội dung không bị thanh tab bar che mất
-        <div className="pt-8 pb-24 min-h-screen flex flex-col items-center justify-center" style={{ background: TONE.GRADIENT_BG }}>
-            <div className="p-8 rounded-xl bg-white shadow-md text-center max-w-md mx-auto" style={{ border: `1px solid ${TONE.ACCENT_GREEN}` }}>
-                <ShoppingBag size={48} className="mx-auto mb-4" style={{ color: TONE.ACCENT_DARK_GREEN }} />
-                {/* Tiêu đề dùng TEXT_DARK */}
-                <h2 className="text-xl font-bold mb-2" style={{ fontFamily: 'Playfair Display, serif', color: TONE.TEXT_DARK }}>Giỏ hàng trống</h2>
-                {/* Mô tả dùng TEXT_DARK */}
-                <p className="text-sm mb-6" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>Hãy thêm các sản phẩm yêu thích vào giỏ hàng của bạn!</p>
-                <button 
-                    className="w-full py-2 rounded-lg text-white font-semibold text-sm hover:opacity-90 transition-opacity"
-                    style={{ backgroundColor: TONE.ACCENT_DARK_GREEN, fontFamily: 'Inter, sans-serif' }}
-                    onClick={() => {}} 
-                >
-                    Tiếp tục mua sắm
-                </button>
-            </div>
+  const generateOutfit = () => {
+    setIsGenerating(true);
+    // Simulation of AI processing
+    setTimeout(() => {
+      const outfits = [
+        "🌿 Minimalist: Áo sơ mi linen trắng + Quần culottes be.",
+        "🌸 Vintage Soul: Váy midi hoa nhí + Túi cói thủ công.",
+        "🏙️ City Chic: Áo phông tái chế + Jeans ống rộng + Sneaker trắng.",
+      ];
+      setAiOutfit(outfits[Math.floor(Math.random() * outfits.length)]);
+      setIsGenerating(false);
+      showToast("Đã tạo gợi ý phối đồ mới!");
+    }, 1500);
+  };
+
+  return (
+    <div className="pt-6 pb-32 px-4 max-w-4xl mx-auto animate-fade-in">
+      {/* Header Banner */}
+      <div className="bg-gradient-to-r from-[#eef2f3] to-[#8e9eab] rounded-2xl p-6 mb-6 text-white shadow-md relative overflow-hidden">
+         <div className="absolute inset-0 bg-black opacity-10"></div>
+         <div className="relative z-10">
+            <h2 className="text-2xl font-bold mb-1 flex items-center text-gray-800" style={{ fontFamily: 'Playfair Display, serif' }}>
+              <Layers className="mr-2"/> Green Inspire Zone
+            </h2>
+            <p className="text-sm text-gray-700 font-medium">Kết nối cộng đồng sống xanh & thời trang bền vững.</p>
+         </div>
+      </div>
+
+      {/* Points Card */}
+      <div className="bg-white rounded-xl p-5 mb-6 shadow-sm border border-gray-100 flex justify-between items-center">
+        <div className="flex items-center gap-4">
+          <div className="p-3 rounded-full bg-green-50">
+            <Heart size={24} style={{ color: TONE.ACCENT_DARK_GREEN }}/>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase text-gray-500">Điểm Xanh</p>
+            <p className="text-3xl font-black" style={{ color: TONE.ACCENT_DARK_GREEN, fontFamily: 'Quicksand, sans-serif' }}>{greenPoints}</p>
+          </div>
         </div>
-    );
+        <button 
+          onClick={() => showToast("Chức năng đổi quà đang được phát triển!")}
+          className="px-4 py-2 rounded-lg text-xs font-bold text-white shadow-sm hover:shadow-md transition-all"
+          style={{ backgroundColor: TONE.ACCENT_DARK_GREEN }}
+        >
+          Đổi Ưu Đãi
+        </button>
+      </div>
+
+      {/* AI Outfit Tool */}
+      <div className="bg-white rounded-xl p-6 mb-6 shadow-sm border border-dashed" style={{ borderColor: TONE.ACCENT_GREEN }}>
+        <h3 className="text-lg font-bold mb-3 flex items-center" style={{ color: TONE.TEXT_DARK }}>
+          <Shirt size={20} className="mr-2"/> Trợ lý Phối Đồ Bền Vững
+        </h3>
+        <p className="text-sm text-gray-600 mb-4">
+          Không cần mua mới. Hãy để AI giúp bạn làm mới tủ đồ hiện có.
+        </p>
+        
+        <button 
+          onClick={generateOutfit} 
+          disabled={isGenerating}
+          className="w-full py-3 rounded-lg text-white font-semibold text-sm hover:opacity-90 active:scale-95 transition-all flex items-center justify-center"
+          style={{ backgroundColor: TONE.ACCENT_DARK_GREEN }}
+        >
+           {isGenerating ? "Đang phân tích tủ đồ..." : "✨ Gợi ý Outfit Hôm Nay"}
+        </button>
+        
+        {aiOutfit && (
+          <div className="mt-4 p-4 rounded-lg bg-[#F7F6F0] border border-[#e5e7eb] animate-fade-in">
+             <p className="text-center font-medium text-gray-700 font-serif italic">"{aiOutfit}"</p>
+          </div>
+        )}
+      </div>
+
+      {/* Swap Section */}
+      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+        <h3 className="text-lg font-bold mb-4" style={{ color: TONE.TEXT_DARK }}>Góc Trao Đổi (Swap Market)</h3>
+        <div className="space-y-3">
+          <div className="flex items-center p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors border border-transparent hover:border-gray-100">
+            <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center mr-3">🧥</div>
+            <div>
+              <p className="font-semibold text-sm text-gray-800">Áo len Oversize (Size M)</p>
+              <p className="text-xs text-gray-500">Tình trạng: 95% • Cách đây 2 giờ</p>
+            </div>
+          </div>
+          <div className="flex items-center p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors border border-transparent hover:border-gray-100">
+            <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center mr-3">👖</div>
+            <div>
+              <p className="font-semibold text-sm text-gray-800">Quần Jeans Ống Rộng</p>
+              <p className="text-xs text-gray-500">Tình trạng: 80% • Cách đây 5 giờ</p>
+            </div>
+          </div>
+          <button 
+            onClick={() => showToast("Vui lòng đăng nhập để đăng bài!")}
+            className="w-full mt-2 text-xs font-bold uppercase tracking-wide py-2 text-gray-500 hover:text-gray-800"
+          >
+            + Đăng tin mới
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 };
 
-/**
- * CẬP NHẬT: Trang Cá Nhân/Hồ Sơ giả lập - Thêm Green Profile
- */
-const ProfileView = () => {
-    // Dữ liệu giả lập cho Green Profile
-    const [greenPoints, setGreenPoints] = useState(550);
-    const [itemsSwapped, setItemsSwapped] = useState(8);
-    const [postsShared, setPostsShared] = useState(12);
-
-    return (
-        // ĐÃ CẬP NHẬT: Thêm padding bottom (pb-24) để nội dung không bị thanh tab bar che mất
-        <div className="pt-8 pb-24 min-h-screen" style={{ background: TONE.GRADIENT_BG }}>
-            <div className="max-w-4xl mx-auto p-4">
-                
-                {/* Khu vực Green Profile - THÊM MỚI THEO DỰ ÁN */}
-                <div className="bg-white rounded-xl p-6 mb-6 shadow-md" style={{ border: `1px solid ${TONE.ACCENT_YELLOW}` }}>
-                    <h2 className="text-xl font-bold mb-4 flex items-center" style={{ fontFamily: 'Playfair Display, serif', color: TONE.ACCENT_DARK_GREEN }}>
-                        <Heart size={24} className="mr-2"/> Hành Trình Xanh (Green Profile)
-                    </h2>
-                    
-                    {/* Thẻ Điểm Xanh */}
-                    <div className="mb-4 p-4 rounded-lg flex items-center justify-between" style={{ backgroundColor: TONE.ACCENT_GREEN, color: 'white' }}>
-                        <div>
-                            <p className="text-sm font-medium" style={{ fontFamily: 'Inter, sans-serif' }}>Tổng Điểm Xanh (GreenPoints)</p>
-                            <p className="text-4xl font-black mt-1" style={{ fontFamily: 'Quicksand, sans-serif' }}>{greenPoints}</p>
-                        </div>
-                        <button className="py-1 px-3 rounded-full text-xs font-semibold"
-                            style={{ backgroundColor: TONE.ACCENT_DARK_GREEN }}
-                            onClick={() => alert("Chức năng đổi ưu đãi sẽ sớm ra mắt!")}>
-                            Đổi Quà
-                        </button>
-                    </div>
-
-                    {/* Thống kê hoạt động */}
-                    <div className="grid grid-cols-2 gap-4 text-center">
-                        <div className="p-3 rounded-lg border" style={{ borderColor: TONE.ACCENT_YELLOW }}>
-                            <p className="text-2xl font-bold" style={{ color: TONE.ACCENT_DARK_GREEN }}>{itemsSwapped}</p>
-                            <p className="text-xs" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>Đồ đã Trao đổi/Tặng</p>
-                        </div>
-                        <div className="p-3 rounded-lg border" style={{ borderColor: TONE.ACCENT_YELLOW }}>
-                            <p className="text-2xl font-bold" style={{ color: TONE.ACCENT_DARK_GREEN }}>{postsShared}</p>
-                            <p className="text-xs" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>Bài viết đã Chia sẻ</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div className="bg-white rounded-xl p-6 mb-6 shadow-md" style={{ border: `1px solid ${TONE.ACCENT_GREEN}` }}>
-                    <h2 className="text-xl font-bold mb-4" style={{ fontFamily: 'Playfair Display, serif', color: TONE.ACCENT_DARK_GREEN }}>Thông Tin Tài Khoản</h2>
-                    <div className="space-y-4">
-                        <div className="flex items-center space-x-4">
-                            <User size={32} style={{ color: TONE.ACCENT_DARK_GREEN }} />
-                            <div>
-                                {/* TÊN ĐÃ ĐƯỢC CẬP NHẬT */}
-                                <p className="font-semibold" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>Cao Hoàng Vinh</p> 
-                                <p className="text-sm" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>vinh.cao@example.com</p>
-                            </div>
-                        </div>
-                        <button className="w-full py-2 rounded-lg text-sm font-semibold border" style={{ borderColor: TONE.ACCENT_DARK_GREEN, color: TONE.ACCENT_DARK_GREEN, backgroundColor: TONE.BG_PRIMARY, fontFamily: 'Inter, sans-serif' }}>
-                            Chỉnh sửa hồ sơ
-                        </button>
-                        <button className="w-full py-2 rounded-lg text-sm font-semibold border" style={{ borderColor: TONE.ACCENT_DARK_GREEN, color: TONE.ACCENT_DARK_GREEN, backgroundColor: TONE.BG_PRIMARY, fontFamily: 'Inter, sans-serif' }}>
-                            Lịch sử đơn hàng
-                        </button>
-                    </div>
-                </div>
-
-                <div className="bg-white rounded-xl p-6 shadow-md" style={{ border: `1px solid ${TONE.ACCENT_GREEN}` }}>
-                    {/* ĐÃ CẬP NHẬT: Thay thế Grift bằng Dệt Mộc */}
-                    <h3 className="text-lg font-bold mb-3" style={{ fontFamily: 'Playfair Display, serif', color: TONE.ACCENT_DARK_GREEN }}>Về Dệt Mộc</h3>
-                    {/* ĐÃ CẬP NHẬT: Thay thế Grift bằng Dệt Mộc */}
-                    <p className="text-sm leading-relaxed" style={{ fontFamily: 'Inter, sans-serif', color: TONE.TEXT_DARK }}>
-                        Dệt Mộc mang đến những món quà thân thiện môi trường, tinh tế và độc đáo. Chúng tôi tin vào vẻ đẹp của sự tái sinh và giá trị thủ công.
-                    </p>
-                    <button className="mt-4 w-full py-2 rounded-lg text-white font-semibold text-sm hover:opacity-90 transition-opacity"
-                        style={{ backgroundColor: TONE.ACCENT_DARK_GREEN, fontFamily: 'Inter, sans-serif' }}>
-                        Tìm hiểu thêm
-                    </button>
-                </div>
-            </div>
+const CartView = ({ showToast }) => {
+  return (
+    <div className="pt-20 pb-20 min-h-[60vh] flex flex-col items-center justify-center animate-fade-in px-4">
+      <div className="p-10 rounded-2xl bg-white shadow-lg text-center max-w-sm w-full border border-gray-50">
+        <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6">
+           <ShoppingBag size={40} style={{ color: TONE.ACCENT_DARK_GREEN }} opacity={0.5} />
         </div>
-    );
+        <h2 className="text-xl font-bold mb-2" style={{ fontFamily: 'Playfair Display, serif', color: TONE.TEXT_DARK }}>
+          Giỏ hàng đang trống
+        </h2>
+        <p className="text-sm mb-8 text-gray-500 leading-relaxed">
+          Hãy khám phá những sản phẩm xanh và thêm vào giỏ hàng nhé!
+        </p>
+        <button 
+          className="w-full py-3 rounded-lg text-white font-bold text-sm hover:shadow-lg transform active:scale-95 transition-all"
+          style={{ backgroundColor: TONE.ACCENT_DARK_GREEN }}
+          onClick={() => showToast('Hãy quay lại trang chủ để mua sắm!')}
+        >
+          Tiếp tục mua sắm
+        </button>
+      </div>
+    </div>
+  );
 };
 
+const ProfileView = ({ showToast }) => {
+  return (
+    <div className="pt-6 pb-32 px-4 max-w-4xl mx-auto animate-fade-in">
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 text-center mb-6">
+         <div className="w-24 h-24 rounded-full bg-gray-200 mx-auto mb-4 border-4 border-white shadow-md overflow-hidden">
+            {/* Placeholder Avatar */}
+            <User size={64} className="mt-4 mx-auto text-gray-400"/>
+         </div>
+         <h2 className="text-xl font-bold text-gray-800">Cao Hoàng Vinh</h2>
+         <p className="text-sm text-gray-500">Thành viên Hạng Bạc</p>
+      </div>
 
-/**
- * Component App Chính (Quản lý trạng thái)
- */
+      <div className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100">
+         <div className="p-4 border-b border-gray-50 flex justify-between items-center cursor-pointer hover:bg-gray-50 transition-colors"
+              onClick={() => showToast('Đang tải lịch sử...')}>
+            <span className="text-sm font-medium text-gray-700">Lịch sử đơn hàng</span>
+            <span className="text-gray-400">›</span>
+         </div>
+         <div className="p-4 border-b border-gray-50 flex justify-between items-center cursor-pointer hover:bg-gray-50 transition-colors"
+               onClick={() => showToast('Đang tải địa chỉ...')}>
+            <span className="text-sm font-medium text-gray-700">Sổ địa chỉ</span>
+            <span className="text-gray-400">›</span>
+         </div>
+         <div className="p-4 border-b border-gray-50 flex justify-between items-center cursor-pointer hover:bg-gray-50 transition-colors">
+            <span className="text-sm font-medium text-gray-700">Cài đặt tài khoản</span>
+            <span className="text-gray-400">›</span>
+         </div>
+         <div className="p-4 flex justify-between items-center cursor-pointer hover:bg-red-50 transition-colors group">
+            <span className="text-sm font-medium text-red-500 group-hover:text-red-600">Đăng xuất</span>
+         </div>
+      </div>
+    </div>
+  );
+};
+
+// --- Main Application Component ---
+
 const App = () => {
   const [activeView, setActiveView] = useState('home');
+  const [toastMessage, setToastMessage] = useState(null);
+  const [cartCount, setCartCount] = useState(0);
+
+  // Helper to show toast messages
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  // Helper to simulate adding to cart
+  const addToCart = (productName) => {
+    setCartCount(prev => prev + 1);
+    showToast(`Đã thêm "${productName}" vào giỏ!`);
+  };
+
+  // Inject Google Fonts dynamically
+  useEffect(() => {
+    const link = document.createElement('link');
+    link.href = 'https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@700;900&family=Lora:wght@400;700&family=Quicksand:wght@500;700&display=swap';
+    link.rel = 'stylesheet';
+    document.head.appendChild(link);
+    
+    // Cleanup
+    return () => {
+      document.head.removeChild(link);
+    };
+  }, []);
 
   const renderView = () => {
     switch (activeView) {
       case 'home':
-        return <HomeView />;
+        return <HomeView showToast={showToast} addToCart={addToCart} />;
       case 'cart':
-        return <CartView />;
+        return <CartView showToast={showToast} />;
       case 'profile':
-        return <ProfileView />;
-      case 'greenfit': // Green Inspire Zone
-        return <GreenFitHub />;
+        return <ProfileView showToast={showToast} />;
+      case 'greenfit':
+        return <GreenFitHub showToast={showToast} />;
       case 'shop': 
         return (
-          // ĐÃ CẬP NHẬT: Thêm padding bottom (pb-24)
-          <div className="pt-8 pb-24 min-h-screen flex items-center justify-center text-center" style={{ background: TONE.GRADIENT_BG }}>
-            {/* Ưu Đãi dùng TEXT_DARK */}
-            <h2 className="text-2xl font-bold" style={{ fontFamily: 'Playfair Display, serif', color: TONE.TEXT_DARK }}>Ưu Đãi Của Bạn</h2> 
+          <div className="pt-20 pb-20 min-h-[60vh] flex items-center justify-center flex-col animate-fade-in">
+             <DollarSign size={48} className="mb-4 text-gray-300"/>
+             <h2 className="text-xl font-bold text-gray-600 font-serif">Ưu Đãi Đặc Biệt</h2>
+             <p className="text-sm text-gray-400 mt-2">Đang cập nhật chương trình mới...</p>
           </div>
         );
       default:
-        return <HomeView />;
+        return <HomeView showToast={showToast} addToCart={addToCart} />;
     }
   };
 
   return (
-    // Đã loại bỏ max-w-sm và h-screen để mở rộng cho desktop
-    <div className="min-h-screen antialiased" style={{ backgroundColor: TONE.BG_PRIMARY }}> 
+    <div className="min-h-screen antialiased text-gray-800 selection:bg-[#A2D396] selection:text-white" 
+         style={{ background: TONE.GRADIENT_BG, fontFamily: 'Inter, sans-serif' }}>
+      
+      {/* Global Toast Notification */}
+      {toastMessage && <Toast message={toastMessage} onClose={() => setToastMessage(null)} />}
+
       <div className="relative w-full flex flex-col min-h-screen">
-        {/* Header trên cùng (Chỉ còn Logo và Giỏ hàng) */}
-        <MobileHeader setActiveView={setActiveView} />
-        <div className="flex-grow overflow-y-auto">
-          {renderView()}
-        </div>
+        <Header setActiveView={setActiveView} cartCount={cartCount} />
         
-        {/* THANH TAB BAR CỐ ĐỊNH Ở DƯỚI */}
-        <MobileBottomBar activeView={activeView} setActiveView={setActiveView} />
+        <main className="flex-grow w-full">
+          {renderView()}
+        </main>
+        
+        <BottomNavigation activeView={activeView} setActiveView={setActiveView} />
       </div>
+
+      {/* Tailwind Custom Animations Style Injection */}
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+          animation: fadeIn 0.4s ease-out forwards;
+        }
+        @keyframes fadeInDown {
+          from { opacity: 0; transform: translate(-50%, -20px); }
+          to { opacity: 1; transform: translate(-50%, 0); }
+        }
+        .animate-fade-in-down {
+          animation: fadeInDown 0.3s ease-out forwards;
+        }
+        .pb-safe {
+          padding-bottom: env(safe-area-inset-bottom);
+        }
+      `}</style>
     </div>
   );
 };
-
-// Thiết lập font chữ cho toàn bộ ứng dụng
-const rootStyle = document.documentElement.style;
-rootStyle.setProperty('font-family', 'Inter, sans-serif');
-const link = document.createElement('link');
-// Đã thêm Quicksand vào link import font
-link.href = 'https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@700;900&family=Lora:wght@400;700&family=Quicksand:wght@500;700&display=swap';
-link.rel = 'stylesheet';
-document.head.appendChild(link);
-
 
 export default App;
